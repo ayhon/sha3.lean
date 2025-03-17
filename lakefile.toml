@@ -1,0 +1,11 @@
+name = "sha3"
+version = "0.1.0"
+defaultTargets = ["sha3"]
+
+[[lean_lib]]
+name = "Sha3"
+
+[[require]]
+name = "mathlib"
+git = "https://github.com/leanprover-community/mathlib4"
+rev = "v4.17.0"
