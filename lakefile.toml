@@ -1,9 +1,13 @@
 name = "Sha3"
 version = "0.1.0"
 defaultTargets = ["Sha3"]
+testDriver = "Test"
 
 [[lean_lib]]
 name = "Sha3"
+
+[[lean_exe]]
+name = "Test"
 
 # [[require]]
 # name = "mathlib"
