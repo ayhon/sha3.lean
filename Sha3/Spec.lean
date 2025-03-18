@@ -1,7 +1,7 @@
 
-private def Vector.xor(v: Vector Bool n): Bool := v.foldl (·^^·) false
-private def Vector.modify(v: Vector α n)(i: Fin n)(modif: α → α) : Vector α n :=
-  ⟨v.toArray.modify i modif, by simp only [Array.size_modify, size_toArray] ⟩
+/- private def Vector.xor(v: Vector Bool n): Bool := v.foldl (·^^·) false -/
+/- private def Vector.modify(v: Vector α n)(i: Fin n)(modif: α → α) : Vector α n := -/
+/-   ⟨v.toArray.modify i modif, by simp only [Array.size_modify, size_toArray] ⟩ -/
 private def Vector.adjust(acc: Vector α n)(len: Nat)(fill: α): Vector α len := 
   let res := acc.toArray.take len ++ (Array.mkArray (len - n) fill)
   ⟨res, by 
@@ -13,6 +13,7 @@ private def Vector.adjust(acc: Vector α n)(len: Nat)(fill: α): Vector α len :
       simp [←Nat.add_sub_assoc (Nat.le_of_lt h) n]
       simp [Nat.add_sub_cancel_left]
     ⟩
+
 private def Vector.ofArray(arr: Array α): Vector α arr.size := ⟨arr, rfl⟩
 
 private def Array.chunks(k: Nat)(arr: Array α): Array (Vector α k) :=
@@ -25,11 +26,16 @@ termination_by arr.size
 local instance: OfNat Bool 0 where ofNat := false
 local instance: OfNat Bool 1 where ofNat := true
 
+
 namespace Spec/- {{{ -/
 abbrev Bit := Bool
 abbrev BitString (n: Nat) := Vector Bit n
 
-def BitArray.filled(n: Nat)(default: Bit) := Vector.mkVector n default
+def BitString.filled(n: Nat)(default: Bit) := Vector.mkVector n default
+
+local instance: Xor (BitString n)  where
+  xor as bs := as.zipWith (·^^·) bs
+
 
 variable {l: Fin 7}               -- Possible values:  0,  1,   2,   3,   4,   5,    6
 abbrev w (l: Fin 7) := 2^l.val    -- Possible values:  1,  2,   4,   8,  16,  32,   64
@@ -102,57 +108,52 @@ end StateArray/- }}} -/
 section «Step Mappings»/- {{{ -/
 
 def θ(A: StateArray l): StateArray l := 
-  StateArray.ofFn fun x y z => (A.get x y z) ^^ (A.col (x-1) z).xor ^^ (A.col (x+1) (z-1)).xor
+  let C x z := A.get x 0 z ^^ A.get x 1 z ^^ A.get x 2 z ^^ A.get x 3 z ^^ A.get x 4 z
+  let D x z := C (x-1) z ^^ C (x+1) (z-1)
+  StateArray.ofFn fun x y z => (A.get x y z) ^^ D x z
 
 def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
 def ρ(A: StateArray l): StateArray l := 
   Id.run do
   let mut x: Fin 5 := 1
   let mut y: Fin 5 := 0
-  let mut A' := StateArray.ofFn fun x y z => if x = 0 ∧ y = 0 then A.get 0 0 z else default
-  for t in List.finRange 24 do
+  -- NOTE: We could have it be simply A, since we don't care about the default values
+  let mut A' := A -- StateArray.ofFn fun x y z => if x = 0 ∧ y = 0 then A.get 0 0 z else default
+  for t in List.finRange 24 do -- from 0 until 23
     for z in List.finRange (w l) do
       A' := A'.set x y z <| A.get x y <| z - ρ.offset t
       x := y
-      y := (2*x + 3*y)
+      y := 2*x + 3*y
   return A'
 
 def π(A: StateArray l): StateArray l := StateArray.ofFn fun x y z => A.get (x + 3*y) x z
 
 def χ(A: StateArray l): StateArray l := 
-  StateArray.ofFn fun x y z => A.get x y z ^^ ((A.get (x+1) y z ^^ true) && A.get (x+2) y z)
+  StateArray.ofFn fun x y z => A.get x y z ^^ ((A.get (x+1) y z ^^ 1) && A.get (x+2) y z)
 
 def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
   if t = 0 then return true  
   let mut R: BitString 8 := #v[1,0,0,0, 0,0,0,0]
-  for i in [1:t] do
+  for i in [1:t+1] do -- From 1 to t, inclusive!
     let R': BitString 9 := ⟨#[0] ++ R.toArray, by simp⟩
-    let R' := R'.modify 0 (· ^^ R'.get! 8)
-    let R' := R'.modify 4 (· ^^ R'.get! 8)
-    let R' := R'.modify 5 (· ^^ R'.get! 8)
-    let R' := R'.modify 6 (· ^^ R'.get! 8)
+    let R' := R'.set 0 <| R'[0] ^^ R'[8]
+    let R' := R'.set 4 <| R'[4] ^^ R'[8]
+    let R' := R'.set 5 <| R'[5] ^^ R'[8]
+    let R' := R'.set 6 <| R'[6] ^^ R'[8]
     R := R'.take 8
   return R.get 0
 
 def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
-  let mut A' := A
-  let mut RC := Vector.mkVector (w l) false
+  let mut RC: BitString (w l) := BitString.filled (w l) 0
   for j in List.finRange (l.val + 1) do
-    have h := 
-      calc  2 ^ ↑j - 1
-        _ < 2 ^ ↑j := by 
-          have := j.is_lt
-          have := Nat.two_pow_pos j.val
-          omega
-        _ ≤ 2 ^ ↑l := by 
-          apply Nat.pow_le_pow_iff_right (by decide: 1 < 2) |>.mpr
-          exact Fin.is_le j
-    RC := RC.set (2^j.val - 1) (ι.rc (j.val + 7*iᵣ)) (h)
-  A' := StateArray.ofFn fun
-          | 0, 0, z => A'.get 0 0 z ^^ RC.get z
-          | x, y, z => A'.get x y z
-  return A'
+    have j_valid_idx := calc  2 ^ ↑j - 1
+        _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
+        _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
+    RC := RC.set (2^↑j - 1) (ι.rc (↑j + 7*iᵣ)) j_valid_idx
+  return StateArray.ofFn fun
+    | 0, 0, z => A.get 0 0 z ^^ RC.get z
+    | x, y, z => A.get x y z
 
 end «Step Mappings»/- }}} -/
 
@@ -160,11 +161,11 @@ def Rnd(A: StateArray l)(iᵣ: Nat) := ι iᵣ <| χ <| π <| ρ <| θ <| A
 
 def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
   let mut A := StateArray.ofVector S
-  for iᵣ in [12 + 2*l - nᵣ:12 + 2*l - 1] do
+  for iᵣ in [12 + 2*l - nᵣ: 12 + 2*l - 1 + 1] do -- inclusive range!
     A := Rnd A iᵣ
   return A.toVector
 
-def F(l: Fin 7) := Keccak.P l (nᵣ:= 12 + 2*l)
+def F l := Keccak.P l (nᵣ:= 12 + 2*l)
 
 end Keccak/- }}} -/
 
@@ -175,13 +176,10 @@ section Sponge/- {{{ -/
 /- /1- structure PadFn where -1/ -/
 /- /1-   -- x > 0 -1/ -/
 /- /1-   len:   (x:Nat) → (m:Nat) → Nat -1/ -/
-/- /1-   apply: (x:Nat) → (m:Nat) → BitArray (len x m) -1/ -/
+/- /1-   apply: (x:Nat) → (m:Nat) → BitString (len x m) -1/ -/
 /- /1-   prop{x m}: x ∣ (len x m) -1/ -/
 
 /- end Pad -/
-
-instance: Xor (BitString n)  where
-  xor as bs := as.zipWith (·^^·) bs
 
 def sponge.squeze
     (f: BitString (b l) → BitString (b l))
@@ -221,18 +219,20 @@ def sponge{l: Fin 7}
   let P := N.toArray ++ pad r N.size
   let n := P.size / r
   let c := (b l) - r -- NOTE: Deprecated by use of `Vector.adjust`
-  let chunks := P.chunks r
+  let Ps := P.chunks r
+  assert! Ps.size = n
   Id.run do
-  let mut S: BitString (b l) := Vector.mkVector (b l) false
-  for i in [0:n] do
-    S := f (S ^^^ (chunks[i]!.adjust (b l) false))
-  sponge.squeze f r (S.toArray.take r) S
+  let mut S: BitString (b l) := BitString.filled (b l) false
+  for Pᵢ in Ps do
+    S := f (S ^^^ (Pᵢ.adjust (b l) false))
+    assert! (Pᵢ.adjust (b l) false).toArray ==
+            (Pᵢ ++ BitString.filled c false).toArray
+  return sponge.squeze f r (S.toArray.take r) S
 
 
--- NOTE: We need to assume `x > 2` or the modular arithmetic
 def «pad10*1»(x m: Nat): Array Bit := 
-  let j := Int.toNat <| (- m - 2) % x
-  (#v[true] ++ BitArray.filled j false ++ #v[true]).toArray
+  let j := Int.toNat <| (- (m: Int) - 2) % x
+  (#v[true] ++ BitString.filled j false ++ #v[true]).toArray
 
 end Sponge/- }}} -/
 
