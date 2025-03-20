@@ -23,6 +23,7 @@ abbrev w (l: Fin 7) := 2^l.val    -- Possible values:  1,  2,   4,   8,  16,  32
 abbrev b (l: Fin 7) := 5 * 5 * w l-- Possible values: 25, 50, 100, 200, 400, 800, 1600
 
 namespace Keccak/- {{{ -/
+
 /-- The state of the KeccakP function -/
 structure StateArray (l: Fin 7) where
   ofVector ::
@@ -32,6 +33,8 @@ structure StateArray (l: Fin 7) where
 namespace StateArray/- {{{ -/
 variable (x: Fin 5)(y: Fin 5)(z: Fin (w l))(c: Fin (b l))
 
+/-- Transforms an index in the in-memory representation of the StateArray
+    to the indices in the 3-dimensional presentation of the specification. -/
 def decodeIndex: Fin 5 × Fin 5 × Fin (w l) := 
   -- NOTE: The order of the indices is Y, X, Z so that lanes are placed
   -- closer together in memory.
@@ -48,6 +51,8 @@ def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
     let z: Fin (w l) := ⟨c % w l, z_lt⟩
     (x,y,z)
 
+/-- Transforms the indices in the 3-dimensional presentation of the specification
+    to the in-memory representation of the StateArray. -/
 def encodeIndex: Fin (b l) := 
   have := by 
     have: z / w l = (0 : Nat) := by
@@ -157,12 +162,14 @@ def Rnd(A: StateArray l)(iᵣ: Nat) :=
   let A' := ι iᵣ A'
   A'
 
+/-- The permutation function Keccak-p[b,nᵣ], defined in terms of l instead of b. -/
 def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
   let mut A := StateArray.ofVector S
   for iᵣ in [(12 + 2*↑l) - nᵣ: (12 + 2*↑l) - 1 + 1] do -- inclusive range!
     A := Rnd A iᵣ
   return A.toVector
 
+/-- The Keccak-f[b] family of permutations, defined in terms of l instead of b. -/
 def F l := Keccak.P l (nᵣ:= 12 + 2*l)
 
 end Keccak/- }}} -/
@@ -190,6 +197,13 @@ decreasing_by
   simp
   omega
 
+/--
+The sponge construction is a framework for specifying functions on binary data with
+arbitrary output length. The construction employs the following three components:
+ · An underlying function on fixed-length strings, denoted by f, 
+ · A parameter called the rate, denoted by r, and 
+ · A padding rule, denoted by pad.
+-/
 def sponge{l: Fin 7}
   (f: BitString (b l) → BitString (b l))
   (pad: Nat → Nat → Array Bit)
@@ -213,23 +227,27 @@ def sponge{l: Fin 7}
   let hash :=  sponge.squeze f r (S.toArray.take r) S
   return hash
 
+/-- The padding rule for K ECCAK, called multi-rate padding -/
 def «pad10*1»(x m: Nat): Array Bit := 
   let j := Int.toNat <| (- (m: Int) - 2) % x
   (#v[true] ++ BitString.filled j false ++ #v[true]).toArray
 
 end Sponge/- }}} -/
 
+/-- The Keccak[c] family of sponge functions, restricted to b = 1600 (or l = 6) -/
 def Keccak(c: Fin (b 6)):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := (b 6) - c)
 
 private abbrev SHA3_suffix:     Array Bit := #[0,1]
 private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
 private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[1,1]
 
+-- Hash functions
 def SHA3_224   (M : Array Bit)         := Keccak (c := 2*224) (M ++ SHA3_suffix    ) 224
 def SHA3_256   (M : Array Bit)         := Keccak (c := 2*256) (M ++ SHA3_suffix    ) 256
 def SHA3_384   (M : Array Bit)         := Keccak (c := 2*384) (M ++ SHA3_suffix    ) 384
 def SHA3_512   (M : Array Bit)         := Keccak (c := 2*512) (M ++ SHA3_suffix    ) 512
 
+-- XOF functions
 def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c := 2*128) (M ++ SHAKE_suffix   )   d
 def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c := 2*256) (M ++ SHAKE_suffix   )   d
 
