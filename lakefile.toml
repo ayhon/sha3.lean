@@ -6,8 +6,14 @@ testDriver = "Test"
 [[lean_lib]]
 name = "Sha3"
 
+[[lean_lib]]
+name = "Test"
+extraDepTargets = ["Sha3"]
+
 [[lean_exe]]
 name = "Test"
+srcDir = "Test"
+root = "Main"
 
 # [[require]]
 # name = "mathlib"

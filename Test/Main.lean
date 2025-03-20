@@ -1,6 +1,8 @@
 import Sha3.Spec
 import Sha3.Utils
+import Test.TestVectors
 open Spec (Bit)
+
 
 inductive Sha3FuncType where
 | SHA3_224
@@ -53,16 +55,12 @@ def runPython(ty: Sha3FuncType)(S: String): IO String := do
 
   return out.stdout.trim
 
-def ArrayBit.toHex(arrs: Array Bit): String :=
-  let n := arrs.reverse.mapIdx (2^· * if · then 1 else 0) |>.sum
-  let s := (Nat.toDigits 16 n).asString
-  s
-
-def testOn(ty: Sha3FuncType)(msg: String): IO (Except String Unit) := do
-  let expected ← runPython ty msg
+def testOn(msg: String)(ty: Sha3FuncType)(getExpected: IO String): IO (Except String Unit) := do
+/- def testOn(ty: Sha3FuncType)(msg: String): IO (Except String Unit) := do -/
+  let expected ← getExpected
   let actual := toString <| ty.toFunc msg.toUTF8Bits
   if expected ≠ actual then
-    return .error s!"On {msg}, expected = {expected} actual = {actual}"
+    return .error s!"{ty}: Error on {msg}, \n\texpected = {expected}\n\tactual = {actual}"
   else
     return .ok ()
 
@@ -88,32 +86,56 @@ def randomString(len?: Option Nat := none): IO String := do
     |>.mapM (fun _ => randomChar)
   return res.asString
 
-def main(_args: List String): IO Unit := do
+def testRandom: IO (Array String) := do
   let msgs := [
-    "Lean",
-    "Aeneas",
-    "Charon",
-  ] ++ (←List.range 10 |>.mapM (fun _ => randomString))
+      "Lean",
+      "Aeneas",
+      "Charon",
+  ].append <| ← List.range 10 
+    |>.mapM (fun _ => randomString)
 
   let mut errors := #[]
   for msg in msgs do
-    if let .error e ← testOn (.SHA3_224) msg then
-      errors := errors.push <| "SHA3_224: " ++ e
-    if let .error e ← testOn (.SHA3_256) msg then
-      errors := errors.push <| "SHA3_256: " ++ e
-    if let .error e ← testOn (.SHA3_384) msg then
-      errors := errors.push <| "SHA3_384: " ++ e
-    if let .error e ← testOn (.SHA3_512) msg then
-      errors := errors.push <| "SHA3_512: " ++ e
+    let types: List Sha3FuncType := [.SHA3_224, .SHA3_256, .SHA3_384, .SHA3_512]
+    for ty in types do
+      if let .error e ← testOn msg ty (runPython ty msg) then
+        errors := errors.push <| e
+
     let d := (←IO.rand 10 100) * 8
-    if let .error e ← testOn (.SHAKE128 d) msg then
-      errors := errors.push <| "SHAKE128 (d={d}): " ++ e
-    if let .error e ← testOn (.SHAKE256 d) msg then
-      errors := errors.push <| "SHAKE256 (d={d}): " ++ e
+    let types: List Sha3FuncType := [.SHAKE128 d, .SHAKE256 d]
+    for ty in types do
+      if let .error e ← testOn msg ty (runPython ty msg) then
+        errors := errors.push <| e ++ s!"(d={d})"
+  return errors
+
+def testVectors: IO (Array String) := do
+  let mut errors := #[]
+  let mut count := 1
+  for info in TEST_VECTORS do
+    dbg_trace s!"Running test vector {count}"
+    let SHA3_224 := Spec.SHA3_224 info.message.toUTF8Bits
+    if toString SHA3_224 ≠ info.SHA3_224 then
+      errors := errors.push s!"SHA3_224: Error on {info.message}"
+    let SHA3_256 := Spec.SHA3_256 info.message.toUTF8Bits
+    if toString SHA3_256 ≠ info.SHA3_256 then
+      errors := errors.push s!"SHA3_256: Error on {info.message}"
+    let SHA3_384 := Spec.SHA3_384 info.message.toUTF8Bits
+    if toString SHA3_384 ≠ info.SHA3_384 then
+      errors := errors.push s!"SHA3_384: Error on {info.message}"
+    let SHA3_512 := Spec.SHA3_512 info.message.toUTF8Bits
+    if toString SHA3_512 ≠ info.SHA3_512 then
+      errors := errors.push s!"SHA3_512 Error on {info.message}"
+    count := count + 1
+  return errors
+
+
+def main(_args: List String): IO Unit := do
+  let mut errors := #[]
+  errors := errors.append <| ←testRandom
+  errors := errors.append <| ←testVectors
+
   if ¬ errors.isEmpty then
     IO.println "ERRORS"
     IO.println <| "\n".intercalate errors.toList
   else
     IO.println "SUCCESS"
-
-#eval Spec.SHAKE128 "Lean".toUTF8Bits (d := 333)
