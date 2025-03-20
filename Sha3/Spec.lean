@@ -36,10 +36,8 @@ variable (x: Fin 5)(y: Fin 5)(z: Fin (w l))(c: Fin (b l))
 /-- Transforms an index in the in-memory representation of the StateArray
     to the indices in the 3-dimensional presentation of the specification. -/
 def decodeIndex: Fin 5 × Fin 5 × Fin (w l) := 
-  -- NOTE: The order of the indices is Y, X, Z so that lanes are placed
-  -- closer together in memory.
     have x_lt := by apply Nat.mod_lt; decide
-    have y_lt := by -- TODO: Try scalar_tac
+    have y_lt := by
       obtain ⟨_, _⟩ := c
       apply Nat.div_lt_iff_lt_mul (by decide) |>.mpr
       apply Nat.div_lt_iff_lt_mul (by apply Nat.two_pow_pos) |>.mpr
