@@ -2,6 +2,8 @@ import Sha3.Utils
 
 local instance: OfNat Bool 0 where ofNat := false
 local instance: OfNat Bool 1 where ofNat := true
+local instance(x: Fin n): NeZero (n - x) where out := by omega
+
 
 namespace Spec/- {{{ -/
 abbrev Bit := Bool
@@ -207,6 +209,7 @@ section Sponge/- {{{ -/
 def sponge.squeze
     (f: BitString (b l) → BitString (b l))
     (r: Nat)
+    [NeZero r]
     (Z: Array Bit)
     (S: BitString (b l))
 : BitString d
@@ -216,26 +219,20 @@ def sponge.squeze
   else
     let S := f S
     sponge.squeze f r (Z ++ S.toArray.take r) S
-partial_fixpoint -- NOTE: Needed because without `r>0` we cannot prove termination
--- Alternatively:
-/- termination_by d - Z.size -/
-/- decreasing_by -/
-/-   have : (b l) >= 1 :=by -/
-/-     simp [b, w] -/
-/-     apply Nat.mul_pos -/
-/-     · decide -/
-/-     · exact Nat.two_pow_pos l.val -/
-/-   rename_i r_ne_zero -/
-/-   have : r >= 1 := Nat.pos_of_ne_zero r_ne_zero.out -/
-/-   simp -/
-/-   omega -/
+termination_by d - Z.size
+decreasing_by
+  have: (b l) >= 1 := Nat.mul_pos (by decide) (Nat.two_pow_pos l.val)
+  have: r >= 1 := Nat.pos_of_ne_zero NeZero.out
+  simp
+  omega
 
 def sponge{l: Fin 7}
   (f: BitString (b l) → BitString (b l))
   (pad: Nat → Nat → Array Bit)
   (r: Nat) -- non-negative integer
+  [NeZero r]
   (N: Array Bit)
-  (d: Nat) -- non-negative integer
+  (d: Nat)
 : BitString d := 
   let P := N ++ pad r N.size
   assert! P.size % r == 0
@@ -246,7 +243,7 @@ def sponge{l: Fin 7}
   Id.run do
   let mut S: BitString (b l) := BitString.filled (b l) false
   for Pᵢ in Ps do
-    /- dbg_trace s!"State (in bytes)\n{S.pDump}" -/
+    dbg_trace s!"State (in bytes)\n{S.pDump}"
     /- dbg_trace s!"Data to be absorbed\n{BitString.pDump (Pᵢ.adjust (b l) false)}" -/
     /- dbg_trace s!"Xor'd state (in bytes)\n{(S ^^^ Pᵢ.adjust (b l) 0).pDump}" -/
     /- dbg_trace s!"Xor'd state (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S ^^^ Pᵢ.adjust (b l) 0}" -/
@@ -265,7 +262,7 @@ def «pad10*1»(x m: Nat): Array Bit :=
 
 end Sponge/- }}} -/
 
-def Keccak(c: Nat):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := (b 6) - c)
+def Keccak(c: Fin (b 6)):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := (b 6) - c)
 
 private abbrev SHA3_suffix:     Array Bit := #[0,1]
 private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
