@@ -7,8 +7,8 @@ inductive Sha3FuncType where
 | SHA3_256
 | SHA3_384
 | SHA3_512
-| SHAKE128
-| SHAKE256
+| SHAKE128 (d: Nat)
+| SHAKE256 (d: Nat)
 
 instance: ToString Sha3FuncType where
   toString
@@ -16,24 +16,33 @@ instance: ToString Sha3FuncType where
   | .SHA3_256 => "SHA3_256"
   | .SHA3_384 => "SHA3_384"
   | .SHA3_512 => "SHA3_512"
-  | .SHAKE128 => "SHAKE128"
-  | .SHAKE256 => "SHAKE256"
+  | .SHAKE128 _ => "SHAKE128"
+  | .SHAKE256 _ => "SHAKE256"
+
+def extraArgs: Sha3FuncType → Array String
+  | .SHA3_224   
+  | .SHA3_256   
+  | .SHA3_384   
+  | .SHA3_512 => #[]
+  | .SHAKE128 d 
+  | .SHAKE256 d => #[toString (d/8)]
 
 def Sha3FuncType.toFunc: Sha3FuncType → Array Bit → String
 | .SHA3_224 => toString ∘ Spec.SHA3_224
 | .SHA3_256 => toString ∘ Spec.SHA3_256
 | .SHA3_384 => toString ∘ Spec.SHA3_384
 | .SHA3_512 => toString ∘ Spec.SHA3_512
-| .SHAKE128 => toString ∘ Spec.SHAKE128 (d := 373)
-| .SHAKE256 => toString ∘ Spec.SHAKE256 (d := 373)
+| .SHAKE128 d => toString ∘ Spec.SHAKE128 (d := d)
+| .SHAKE256 d => toString ∘ Spec.SHAKE256 (d := d)
 
 def runPython(ty: Sha3FuncType)(S: String): IO String := do
   let args := #[
-      "python",
-      "sha3.py",
-      toString ty,
-      S
-    ]
+    "python",
+    "sha3.py",
+    toString ty,
+    S
+  ] ++ extraArgs ty
+  dbg_trace s!"Running {args}"
   let out ← IO.Process.output {
     cmd := "/usr/bin/env",
     args
@@ -96,8 +105,15 @@ def main(_args: List String): IO Unit := do
       errors := errors.push <| "SHA3_384: " ++ e
     if let .error e ← testOn (.SHA3_512) msg then
       errors := errors.push <| "SHA3_512: " ++ e
+    let d := (←IO.rand 10 100) * 8
+    if let .error e ← testOn (.SHAKE128 d) msg then
+      errors := errors.push <| "SHAKE128 (d={d}): " ++ e
+    if let .error e ← testOn (.SHAKE256 d) msg then
+      errors := errors.push <| "SHAKE256 (d={d}): " ++ e
   if ¬ errors.isEmpty then
     IO.println "ERRORS"
     IO.println <| "\n".intercalate errors.toList
   else
     IO.println "SUCCESS"
+
+#eval Spec.SHAKE128 "Lean".toUTF8Bits (d := 333)

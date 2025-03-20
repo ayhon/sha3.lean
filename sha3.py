@@ -8,28 +8,28 @@ def main(args: list[str]) -> int:
     match op:
         case "SHA3_224":
             bs = args[0].encode()
-            res = sha3_224(bs).digest()
+            res = sha3_224(bs).hexdigest()
         case "SHA3_256":
             bs = args[0].encode()
-            res = sha3_256(bs).digest()
+            res = sha3_256(bs).hexdigest()
         case "SHA3_384":
             bs = args[0].encode()
-            res = sha3_384(bs).digest()
+            res = sha3_384(bs).hexdigest()
         case "SHA3_512":
             bs = args[0].encode()
-            res = sha3_512(bs).digest()
+            res = sha3_512(bs).hexdigest()
         case "SHAKE128":
             bs = args[0].encode()
             d = int(args[1])
-            res = shake_128(bs).digest(d)
+            res = shake_128(bs).hexdigest(d)
         case "SHAKE256":
             bs = args[0].encode()
             d = int(args[1])
-            res = shake_256(bs).digest(d)
+            res = shake_256(bs).hexdigest(d)
         case _:
             res = None
-    assert res is not None, f"Unrecognized option {op}"
-    print(res.hex())
+    assert res is not None, f"Unrecognized operation {op}"
+    print(res)
 
     return 0
 
