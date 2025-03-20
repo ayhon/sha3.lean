@@ -178,23 +178,23 @@ end «Step Mappings»/- }}} -/
 
 def Rnd(A: StateArray l)(iᵣ: Nat) := 
   let A' := A
-  dbg_trace s!"Before Theta:\n{repr A'}"
+  /- dbg_trace s!"Before Theta:\n{repr A'}" -/
   let A' := θ A'
-  dbg_trace s!"After Theta:\n{repr A'}"
+  /- dbg_trace s!"After Theta:\n{repr A'}" -/
   let A' := ρ A'
-  dbg_trace s!"After Rho:\n{repr A'}"
+  /- dbg_trace s!"After Rho:\n{repr A'}" -/
   let A' := π A'
-  dbg_trace s!"After Pi:\n{repr A'}"
+  /- dbg_trace s!"After Pi:\n{repr A'}" -/
   let A' := χ A'
-  dbg_trace s!"After Chi:\n{repr A'}"
+  /- dbg_trace s!"After Chi:\n{repr A'}" -/
   let A' := ι iᵣ A'
-  dbg_trace s!"After Iota:\n{repr A'}"
+  /- dbg_trace s!"After Iota:\n{repr A'}" -/
   A'
 
 def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
   let mut A := StateArray.ofVector S
   for iᵣ in [(12 + 2*↑l) - nᵣ: (12 + 2*↑l) - 1 + 1] do -- inclusive range!
-    dbg_trace s!"Round #{iᵣ}"
+    /- dbg_trace s!"Round #{iᵣ}" -/
     A := Rnd A iᵣ
   return A.toVector
 
@@ -246,17 +246,17 @@ def sponge{l: Fin 7}
   Id.run do
   let mut S: BitString (b l) := BitString.filled (b l) false
   for Pᵢ in Ps do
-    dbg_trace s!"State (in bytes)\n{S.pDump}"
-    dbg_trace s!"Data to be absorbed\n{BitString.pDump (Pᵢ.adjust (b l) false)}"
-    dbg_trace s!"Xor'd state (in bytes)\n{(S ^^^ Pᵢ.adjust (b l) 0).pDump}"
-    dbg_trace s!"Xor'd state (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S ^^^ Pᵢ.adjust (b l) 0}"
+    /- dbg_trace s!"State (in bytes)\n{S.pDump}" -/
+    /- dbg_trace s!"Data to be absorbed\n{BitString.pDump (Pᵢ.adjust (b l) false)}" -/
+    /- dbg_trace s!"Xor'd state (in bytes)\n{(S ^^^ Pᵢ.adjust (b l) 0).pDump}" -/
+    /- dbg_trace s!"Xor'd state (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S ^^^ Pᵢ.adjust (b l) 0}" -/
     S := f (S ^^^ (Pᵢ.adjust (b l) false))
-    dbg_trace s!"After Permutation\n{S.pDump}"
-    dbg_trace s!"State (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S}"
+    /- dbg_trace s!"After Permutation\n{S.pDump}" -/
+    /- dbg_trace s!"State (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S}" -/
     assert! (Pᵢ.adjust (b l) false).toArray ==
             (Pᵢ ++ BitString.filled c false).toArray
   let hash :=  sponge.squeze f r (S.toArray.take r) S
-  dbg_trace s!"Hash val is\n{hash.pDump}"
+  /- dbg_trace s!"Hash val is\n{hash.pDump}" -/
   return hash
 
 def «pad10*1»(x m: Nat): Array Bit := 
