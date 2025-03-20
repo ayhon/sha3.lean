@@ -1,41 +1,20 @@
-
-/- private def Vector.xor(v: Vector Bool n): Bool := v.foldl (·^^·) false -/
-/- private def Vector.modify(v: Vector α n)(i: Fin n)(modif: α → α) : Vector α n := -/
-/-   ⟨v.toArray.modify i modif, by simp only [Array.size_modify, size_toArray] ⟩ -/
-private def Vector.adjust(acc: Vector α n)(len: Nat)(fill: α): Vector α len := 
-  let res := acc.toArray.take len ++ (Array.mkArray (len - n) fill)
-  ⟨res, by 
-    simp [res]
-    cases h: decide (len > n) <;> simp at *
-    · simp [Nat.min_eq_left h]
-      exact Nat.sub_eq_zero_iff_le.mpr h
-    · simp [Nat.min_eq_right (Nat.le_of_lt h)]
-      simp [←Nat.add_sub_assoc (Nat.le_of_lt h) n]
-      simp [Nat.add_sub_cancel_left]
-    ⟩
-
-private def Vector.ofArray(arr: Array α): Vector α arr.size := ⟨arr, rfl⟩
-
-private def Array.chunks(k: Nat)(arr: Array α): Array (Vector α k) :=
-  if h: arr.size < k ∨ k = 0 then 
-    #[]
-  else
-    #[⟨arr.extract (stop := k), by simp_all [Nat.min_eq_left]⟩] ++ (arr.extract (start := k)).chunks k
-termination_by arr.size
+import Sha3.Utils
 
 local instance: OfNat Bool 0 where ofNat := false
 local instance: OfNat Bool 1 where ofNat := true
-
 
 namespace Spec/- {{{ -/
 abbrev Bit := Bool
 abbrev BitString (n: Nat) := Vector Bit n
 
-def BitString.filled(n: Nat)(default: Bit) := Vector.mkVector n default
+def BitString.filled(n: Nat)(default: Bit): BitString n := Vector.mkVector n default
+
+instance: Repr (BitString n) where reprPrec S _ := Utils.dump (spacing? := false) S
+instance: ToString (BitString n) where toString S := repr S |> toString
+private def BitString.pDump (S: BitString n) := Utils.dump (spacing? := true) S
 
 local instance: Xor (BitString n)  where
   xor as bs := as.zipWith (·^^·) bs
-
 
 variable {l: Fin 7}               -- Possible values:  0,  1,   2,   3,   4,   5,    6
 abbrev w (l: Fin 7) := 2^l.val    -- Possible values:  1,  2,   4,   8,  16,  32,   64
@@ -51,7 +30,7 @@ structure StateArray (l: Fin 7) where
 namespace StateArray/- {{{ -/
 variable (x: Fin 5)(y: Fin 5)(z: Fin (w l))(c: Fin (b l))
 
-private def decodeIndex: Fin 5 × Fin 5 × Fin (w l) := 
+def decodeIndex: Fin 5 × Fin 5 × Fin (w l) := 
   -- NOTE: The order of the indices is Y, X, Z so that lanes are placed
   -- closer together in memory.
     have x_lt := by apply Nat.mod_lt; decide
@@ -67,7 +46,7 @@ private def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
     let z: Fin (w l) := ⟨c % w l, z_lt⟩
     (x,y,z)
 
-private def encodeIndex: Fin (b l) := 
+def encodeIndex: Fin (b l) := 
   have := by 
     have: z / w l = (0 : Nat) := by
       obtain ⟨_,_⟩ := z; simp
@@ -82,28 +61,70 @@ private def encodeIndex: Fin (b l) :=
     exact y.isLt
   ⟨w l * (5 * y + x) + z, this⟩
 
+theorem encode_decode: decodeIndex (encodeIndex x y z) = (x,y,z) := by
+  obtain ⟨x,x_lt⟩:= x
+  obtain ⟨y,y_lt⟩:= y
+  obtain ⟨z,z_lt⟩:= z
+  simp [encodeIndex, decodeIndex]
+  apply And.intro; case' right => apply And.intro
+  · rw [Nat.add_comm]
+    rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
+    simp
+    rw [Nat.add_comm]
+    rw [Nat.add_mul_div_left x _ (by decide), Nat.div_eq_of_lt x_lt]
+    simp
+  · simp [Nat.mod_eq_iff]; right; simp [z_lt]; exists 0
+  · rw [Nat.add_comm]
+    rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
+    simp [Nat.mod_eq_iff]; simp [x_lt]; exists 0
+
+
 def map(f: Bit → Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.map f
+
+private def uncurry3(f: α → β → γ → δ): α × β × γ → δ :=
+  Function.uncurry (fun x => Function.uncurry (f x))
 
 /-- Given a function f which takes x, y and z, return a state array A' where
     A'[x,y,z] = f x y z -/
 def ofFn(f: Fin 5 → Fin 5 → Fin (w l) → Bit): StateArray l := 
-  .ofVector <| Vector.ofFn fun c =>
-    let (x,y,z) := decodeIndex c
-    f y x z
+  .ofVector <| Vector.ofFn (uncurry3 f ∘ decodeIndex)
 
 def get(A: StateArray l): Bit := A.toVector.get <| encodeIndex x y z
 
-/- instance: GetElem (StateArray l) (Fin 5 × Fin 5 × Fin (w l)) Bit (fun _ _ => True) where -/
-/-   getElem | A, (x,y,z), _ => A.get x y z -/
-/- macro A:term noWs "[" xs:term,* "]" : term => `( $A[($[$xs],*)] ) -/
+/- macro A:term noWs "[" x:term "," y:term "," z:term "]" : term => `( ($A).get  $x $y $z ) -/
 
 def set(val: Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.set (encodeIndex x y z) val
 
-def row (A: StateArray l): BitString 5     := Vector.ofFn fun x => A.get x y z
-def col (A: StateArray l): BitString 5     := Vector.ofFn fun y => A.get x y z
-def lane(A: StateArray l): BitString (w l) := Vector.ofFn fun z => A.get x y z
+def row (A: StateArray l): BitString 5     := Vector.ofFn (A.get · y z)
+def col (A: StateArray l): BitString 5     := Vector.ofFn (A.get x · z)
+def lane(A: StateArray l): BitString (w l) := Vector.ofFn (A.get x y ·)
+
+/- def plane(A: StateArray l): BitString (w l + w l + w l + w l + w l) := A.lane 0 y ++ A.lane 1 y ++ A.lane 2 y ++ A.lane 3 y ++ A.lane 4 y -/
+
+/- theorem memory_layout(A: StateArray l) -/
+/- : A.toVector.toArray = (A.plane 0 ++ A.plane 1 ++ A.plane 2 ++ A.plane 3 ++ A.plane 4).toArray -/
+/- := by -/
+/-   congr -/
+/-   · simp [w,b]; omega -/
+/-   obtain ⟨v⟩ := A -/
+/-   obtain ⟨l, l_lt⟩ := l -/
+/-   simp [plane, lane, get, encodeIndex] -/
+/-   sorry -/
+
+instance: Repr (StateArray l) where
+  reprPrec A _ := A.toVector.pDump
+
+open Std.Format in
+private def laneOfInts(v: BitString (b l)): Std.Format := 
+  let A := Keccak.StateArray.ofVector v
+  let lanes := List.finRange 5 |>.flatMap fun y =>
+                 List.finRange 5 |>.map fun x =>
+                   text <| s!"[{x}, {y}] = {A.lane x y |> Utils.toHex |>.zfill 16}"
+  nest 8 <| (align false) ++ (align false).joinSep lanes
+
 
 end StateArray/- }}} -/
+
 
 section «Step Mappings»/- {{{ -/
 
@@ -115,15 +136,13 @@ def θ(A: StateArray l): StateArray l :=
 def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
 def ρ(A: StateArray l): StateArray l := 
   Id.run do
-  let mut x: Fin 5 := 1
-  let mut y: Fin 5 := 0
+  let mut (x, y): Fin 5 × Fin 5 := (1,0)
   -- NOTE: We could have it be simply A, since we don't care about the default values
   let mut A' := A -- StateArray.ofFn fun x y z => if x = 0 ∧ y = 0 then A.get 0 0 z else default
   for t in List.finRange 24 do -- from 0 until 23
     for z in List.finRange (w l) do
-      A' := A'.set x y z <| A.get x y <| z - ρ.offset t
-      x := y
-      y := 2*x + 3*y
+      A' := A'.set x y z <| A.get x y (z - ρ.offset t)
+    (x, y) := (y, 2*x + 3*y)
   return A'
 
 def π(A: StateArray l): StateArray l := StateArray.ofFn fun x y z => A.get (x + 3*y) x z
@@ -157,11 +176,25 @@ def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
 
 end «Step Mappings»/- }}} -/
 
-def Rnd(A: StateArray l)(iᵣ: Nat) := ι iᵣ <| χ <| π <| ρ <| θ <| A
+def Rnd(A: StateArray l)(iᵣ: Nat) := 
+  let A' := A
+  dbg_trace s!"Before Theta:\n{repr A'}"
+  let A' := θ A'
+  dbg_trace s!"After Theta:\n{repr A'}"
+  let A' := ρ A'
+  dbg_trace s!"After Rho:\n{repr A'}"
+  let A' := π A'
+  dbg_trace s!"After Pi:\n{repr A'}"
+  let A' := χ A'
+  dbg_trace s!"After Chi:\n{repr A'}"
+  let A' := ι iᵣ A'
+  dbg_trace s!"After Iota:\n{repr A'}"
+  A'
 
 def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
   let mut A := StateArray.ofVector S
-  for iᵣ in [12 + 2*l - nᵣ: 12 + 2*l - 1 + 1] do -- inclusive range!
+  for iᵣ in [(12 + 2*↑l) - nᵣ: (12 + 2*↑l) - 1 + 1] do -- inclusive range!
+    dbg_trace s!"Round #{iᵣ}"
     A := Rnd A iᵣ
   return A.toVector
 
@@ -171,28 +204,18 @@ end Keccak/- }}} -/
 
 section Sponge/- {{{ -/
 
-/- section Pad -/
-
-/- /1- structure PadFn where -1/ -/
-/- /1-   -- x > 0 -1/ -/
-/- /1-   len:   (x:Nat) → (m:Nat) → Nat -1/ -/
-/- /1-   apply: (x:Nat) → (m:Nat) → BitString (len x m) -1/ -/
-/- /1-   prop{x m}: x ∣ (len x m) -1/ -/
-
-/- end Pad -/
-
 def sponge.squeze
     (f: BitString (b l) → BitString (b l))
     (r: Nat)
-    /- [NeZero r] -/
     (Z: Array Bit)
     (S: BitString (b l))
 : BitString d
 := 
-    if h: Z.size >= d then
-      ⟨Z.take d, by simp [Nat.min_eq_left h]⟩
-    else
-      sponge.squeze f r (Z ++ S.toArray.take r) (f S)
+  if h: d <= Z.size then
+    ⟨Z.take d, by simp [Nat.min_eq_left h]⟩
+  else
+    let S := f S
+    sponge.squeze f r (Z ++ S.toArray.take r) S
 partial_fixpoint -- NOTE: Needed because without `r>0` we cannot prove termination
 -- Alternatively:
 /- termination_by d - Z.size -/
@@ -211,24 +234,30 @@ def sponge{l: Fin 7}
   (f: BitString (b l) → BitString (b l))
   (pad: Nat → Nat → Array Bit)
   (r: Nat) -- non-negative integer
-  /- [NeZero r] -/
-  ⦃m: Nat⦄
-  (N: BitString m)
+  (N: Array Bit)
   (d: Nat) -- non-negative integer
 : BitString d := 
-  let P := N.toArray ++ pad r N.size
+  let P := N ++ pad r N.size
+  assert! P.size % r == 0
   let n := P.size / r
-  let c := (b l) - r -- NOTE: Deprecated by use of `Vector.adjust`
+  let c := (b l) - r
   let Ps := P.chunks r
   assert! Ps.size = n
   Id.run do
   let mut S: BitString (b l) := BitString.filled (b l) false
   for Pᵢ in Ps do
+    dbg_trace s!"State (in bytes)\n{S.pDump}"
+    dbg_trace s!"Data to be absorbed\n{BitString.pDump (Pᵢ.adjust (b l) false)}"
+    dbg_trace s!"Xor'd state (in bytes)\n{(S ^^^ Pᵢ.adjust (b l) 0).pDump}"
+    dbg_trace s!"Xor'd state (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S ^^^ Pᵢ.adjust (b l) 0}"
     S := f (S ^^^ (Pᵢ.adjust (b l) false))
+    dbg_trace s!"After Permutation\n{S.pDump}"
+    dbg_trace s!"State (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S}"
     assert! (Pᵢ.adjust (b l) false).toArray ==
             (Pᵢ ++ BitString.filled c false).toArray
-  return sponge.squeze f r (S.toArray.take r) S
-
+  let hash :=  sponge.squeze f r (S.toArray.take r) S
+  dbg_trace s!"Hash val is\n{hash.pDump}"
+  return hash
 
 def «pad10*1»(x m: Nat): Array Bit := 
   let j := Int.toNat <| (- (m: Int) - 2) % x
@@ -236,21 +265,22 @@ def «pad10*1»(x m: Nat): Array Bit :=
 
 end Sponge/- }}} -/
 
-def Keccak(c: Nat):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := 1600 - c)
+def Keccak(c: Nat):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := (b 6) - c)
 
-private abbrev SHA3_suffix: Array Bit := #[0,1]
+private abbrev SHA3_suffix:     Array Bit := #[0,1]
 private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
-private abbrev SHAKE_suffix: Array Bit := RawSHAKE_suffix ++ #[1,1]
+private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[1,1]
 
-def SHA3_224(M : Array Bit) := Keccak (c := 448) (Vector.ofArray <| M ++ SHA3_suffix) 224
-def SHA3_256(M : Array Bit) := Keccak (c := 512) (Vector.ofArray <| M ++ SHA3_suffix) 256
-def SHA3_384(M : Array Bit) := Keccak (c := 768) (Vector.ofArray <| M ++ SHA3_suffix) 384
-def SHA3_512(M : Array Bit) := Keccak (c :=1024) (Vector.ofArray <| M ++ SHA3_suffix) 512
+/- dbg_trace s!"Msg as bit string:\n{" ".intercalate <| M.toList.map (if · then "1" else "0")}"; -/
+def SHA3_224   (M : Array Bit)         := Keccak (c := 2*224) (M ++ SHA3_suffix    ) 224
+def SHA3_256   (M : Array Bit)         := Keccak (c := 2*256) (M ++ SHA3_suffix    ) 256
+def SHA3_384   (M : Array Bit)         := Keccak (c := 2*384) (M ++ SHA3_suffix    ) 384
+def SHA3_512   (M : Array Bit)         := Keccak (c := 2*512) (M ++ SHA3_suffix    ) 512
 
-def SHAKE128(M : Array Bit)(d: Nat) := Keccak (c := 256) (Vector.ofArray <| M ++ SHAKE_suffix) d
-def SHAKE256(M : Array Bit)(d: Nat) := Keccak (c := 512) (Vector.ofArray <| M ++ SHAKE_suffix) d
+def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c := 2*128) (M ++ SHAKE_suffix   )   d
+def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c := 2*256) (M ++ SHAKE_suffix   )   d
 
-def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c := 256) (Vector.ofArray <| M ++ RawSHAKE_suffix) d
-def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c := 512) (Vector.ofArray <| M ++ RawSHAKE_suffix) d
+def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c := 2*128) (M ++ RawSHAKE_suffix)   d
+def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c := 2*256) (M ++ RawSHAKE_suffix)   d
 
 end Spec/- }}} -/
