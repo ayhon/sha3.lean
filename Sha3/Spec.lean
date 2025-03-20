@@ -83,13 +83,10 @@ theorem encode_decode: decodeIndex (encodeIndex x y z) = (x,y,z) := by
 
 def map(f: Bit → Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.map f
 
-private def uncurry3(f: α → β → γ → δ): α × β × γ → δ :=
-  Function.uncurry (fun x => Function.uncurry (f x))
-
 /-- Given a function f which takes x, y and z, return a state array A' where
     A'[x,y,z] = f x y z -/
-def ofFn(f: Fin 5 → Fin 5 → Fin (w l) → Bit): StateArray l := 
-  .ofVector <| Vector.ofFn (uncurry3 f ∘ decodeIndex)
+def ofFn(f: Fin 5 × Fin 5 × Fin (w l) → Bit): StateArray l := 
+  .ofVector <| Vector.ofFn (f ∘ decodeIndex)
 
 def get(A: StateArray l): Bit := A.toVector.get <| encodeIndex x y z
 
@@ -133,7 +130,7 @@ section «Step Mappings»/- {{{ -/
 def θ(A: StateArray l): StateArray l := 
   let C x z := A.get x 0 z ^^ A.get x 1 z ^^ A.get x 2 z ^^ A.get x 3 z ^^ A.get x 4 z
   let D x z := C (x-1) z ^^ C (x+1) (z-1)
-  StateArray.ofFn fun x y z => (A.get x y z) ^^ D x z
+  StateArray.ofFn fun (x,y,z) => (A.get x y z) ^^ D x z
 
 def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
 def ρ(A: StateArray l): StateArray l := 
@@ -147,10 +144,10 @@ def ρ(A: StateArray l): StateArray l :=
     (x, y) := (y, 2*x + 3*y)
   return A'
 
-def π(A: StateArray l): StateArray l := StateArray.ofFn fun x y z => A.get (x + 3*y) x z
+def π(A: StateArray l): StateArray l := StateArray.ofFn fun (x,y,z) => A.get (x + 3*y) x z
 
 def χ(A: StateArray l): StateArray l := 
-  StateArray.ofFn fun x y z => A.get x y z ^^ ((A.get (x+1) y z ^^ 1) && A.get (x+2) y z)
+  StateArray.ofFn fun (x,y,z) => A.get x y z ^^ ((A.get (x+1) y z ^^ 1) && A.get (x+2) y z)
 
 def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
@@ -173,8 +170,8 @@ def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
         _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
     RC := RC.set (2^↑j - 1) (ι.rc (↑j + 7*iᵣ)) j_valid_idx
   return StateArray.ofFn fun
-    | 0, 0, z => A.get 0 0 z ^^ RC.get z
-    | x, y, z => A.get x y z
+    | (0, 0, z) => A.get 0 0 z ^^ RC.get z
+    | (x, y, z) => A.get x y z
 
 end «Step Mappings»/- }}} -/
 
