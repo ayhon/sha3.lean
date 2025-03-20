@@ -80,7 +80,6 @@ theorem encode_decode: decodeIndex (encodeIndex x y z) = (x,y,z) := by
     rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
     simp [Nat.mod_eq_iff]; simp [x_lt]; exists 0
 
-
 def map(f: Bit → Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.map f
 
 /-- Given a function f which takes x, y and z, return a state array A' where
@@ -90,40 +89,15 @@ def ofFn(f: Fin 5 × Fin 5 × Fin (w l) → Bit): StateArray l :=
 
 def get(A: StateArray l): Bit := A.toVector.get <| encodeIndex x y z
 
-/- macro A:term noWs "[" x:term "," y:term "," z:term "]" : term => `( ($A).get  $x $y $z ) -/
-
 def set(val: Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.set (encodeIndex x y z) val
 
 def row (A: StateArray l): BitString 5     := Vector.ofFn (A.get · y z)
 def col (A: StateArray l): BitString 5     := Vector.ofFn (A.get x · z)
 def lane(A: StateArray l): BitString (w l) := Vector.ofFn (A.get x y ·)
 
-/- def plane(A: StateArray l): BitString (w l + w l + w l + w l + w l) := A.lane 0 y ++ A.lane 1 y ++ A.lane 2 y ++ A.lane 3 y ++ A.lane 4 y -/
-
-/- theorem memory_layout(A: StateArray l) -/
-/- : A.toVector.toArray = (A.plane 0 ++ A.plane 1 ++ A.plane 2 ++ A.plane 3 ++ A.plane 4).toArray -/
-/- := by -/
-/-   congr -/
-/-   · simp [w,b]; omega -/
-/-   obtain ⟨v⟩ := A -/
-/-   obtain ⟨l, l_lt⟩ := l -/
-/-   simp [plane, lane, get, encodeIndex] -/
-/-   sorry -/
-
-instance: Repr (StateArray l) where
-  reprPrec A _ := A.toVector.pDump
-
-open Std.Format in
-private def laneOfInts(v: BitString (b l)): Std.Format := 
-  let A := Keccak.StateArray.ofVector v
-  let lanes := List.finRange 5 |>.flatMap fun y =>
-                 List.finRange 5 |>.map fun x =>
-                   text <| s!"[{x}, {y}] = {A.lane x y |> Utils.toHex |>.zfill 16}"
-  nest 8 <| (align false) ++ (align false).joinSep lanes
-
+instance: Repr (StateArray l) where reprPrec A _ := A.toVector.pDump
 
 end StateArray/- }}} -/
-
 
 section «Step Mappings»/- {{{ -/
 
@@ -136,9 +110,8 @@ def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
 def ρ(A: StateArray l): StateArray l := 
   Id.run do
   let mut (x, y): Fin 5 × Fin 5 := (1,0)
-  -- NOTE: We could have it be simply A, since we don't care about the default values
-  let mut A' := A -- StateArray.ofFn fun x y z => if x = 0 ∧ y = 0 then A.get 0 0 z else default
-  for t in List.finRange 24 do -- from 0 until 23
+  let mut A' := A
+  for t in List.finRange 24 do
     for z in List.finRange (w l) do
       A' := A'.set x y z <| A.get x y (z - ρ.offset t)
     (x, y) := (y, 2*x + 3*y)
@@ -153,7 +126,7 @@ def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
   if t = 0 then return true  
   let mut R: BitString 8 := #v[1,0,0,0, 0,0,0,0]
-  for i in [1:t+1] do -- From 1 to t, inclusive!
+  for i in [1:t+1] do -- inclusive range!
     let R': BitString 9 := ⟨#[0] ++ R.toArray, by simp⟩
     let R' := R'.set 0 <| R'[0] ^^ R'[8]
     let R' := R'.set 4 <| R'[4] ^^ R'[8]
@@ -164,7 +137,7 @@ def ι.rc (t: Nat) := Id.run do
 
 def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
   let mut RC: BitString (w l) := BitString.filled (w l) 0
-  for j in List.finRange (l.val + 1) do
+  for j in List.finRange (l.val + 1) do -- inclusive range!
     have j_valid_idx := calc  2 ^ ↑j - 1
         _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
         _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
@@ -177,23 +150,16 @@ end «Step Mappings»/- }}} -/
 
 def Rnd(A: StateArray l)(iᵣ: Nat) := 
   let A' := A
-  /- dbg_trace s!"Before Theta:\n{repr A'}" -/
   let A' := θ A'
-  /- dbg_trace s!"After Theta:\n{repr A'}" -/
   let A' := ρ A'
-  /- dbg_trace s!"After Rho:\n{repr A'}" -/
   let A' := π A'
-  /- dbg_trace s!"After Pi:\n{repr A'}" -/
   let A' := χ A'
-  /- dbg_trace s!"After Chi:\n{repr A'}" -/
   let A' := ι iᵣ A'
-  /- dbg_trace s!"After Iota:\n{repr A'}" -/
   A'
 
 def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
   let mut A := StateArray.ofVector S
   for iᵣ in [(12 + 2*↑l) - nᵣ: (12 + 2*↑l) - 1 + 1] do -- inclusive range!
-    /- dbg_trace s!"Round #{iᵣ}" -/
     A := Rnd A iᵣ
   return A.toVector
 
@@ -216,6 +182,7 @@ def sponge.squeze
   else
     let S := f S
     sponge.squeze f r (Z ++ S.toArray.take r) S
+
 termination_by d - Z.size
 decreasing_by
   have: (b l) >= 1 := Nat.mul_pos (by decide) (Nat.two_pow_pos l.val)
@@ -240,17 +207,10 @@ def sponge{l: Fin 7}
   Id.run do
   let mut S: BitString (b l) := BitString.filled (b l) false
   for Pᵢ in Ps do
-    dbg_trace s!"State (in bytes)\n{S.pDump}"
-    /- dbg_trace s!"Data to be absorbed\n{BitString.pDump (Pᵢ.adjust (b l) false)}" -/
-    /- dbg_trace s!"Xor'd state (in bytes)\n{(S ^^^ Pᵢ.adjust (b l) 0).pDump}" -/
-    /- dbg_trace s!"Xor'd state (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S ^^^ Pᵢ.adjust (b l) 0}" -/
     S := f (S ^^^ (Pᵢ.adjust (b l) false))
-    /- dbg_trace s!"After Permutation\n{S.pDump}" -/
-    /- dbg_trace s!"State (as lanes of integers)\n{Keccak.StateArray.laneOfInts <| S}" -/
     assert! (Pᵢ.adjust (b l) false).toArray ==
             (Pᵢ ++ BitString.filled c false).toArray
   let hash :=  sponge.squeze f r (S.toArray.take r) S
-  /- dbg_trace s!"Hash val is\n{hash.pDump}" -/
   return hash
 
 def «pad10*1»(x m: Nat): Array Bit := 
@@ -265,7 +225,6 @@ private abbrev SHA3_suffix:     Array Bit := #[0,1]
 private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
 private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[1,1]
 
-/- dbg_trace s!"Msg as bit string:\n{" ".intercalate <| M.toList.map (if · then "1" else "0")}"; -/
 def SHA3_224   (M : Array Bit)         := Keccak (c := 2*224) (M ++ SHA3_suffix    ) 224
 def SHA3_256   (M : Array Bit)         := Keccak (c := 2*256) (M ++ SHA3_suffix    ) 256
 def SHA3_384   (M : Array Bit)         := Keccak (c := 2*384) (M ++ SHA3_suffix    ) 384
