@@ -6,6 +6,7 @@ local instance(x: Fin n): NeZero (n - x) where out := by omega
 
 
 namespace Spec/- {{{ -/
+section Data/- {{{ -/
 abbrev Bit := Bool
 abbrev BitString (n: Nat) := Vector Bit n
 
@@ -15,14 +16,16 @@ instance: Repr (BitString n) where reprPrec S _ := Utils.dump (spacing? := false
 instance: ToString (BitString n) where toString S := repr S |> toString
 private def BitString.pDump (S: BitString n) := Utils.dump (spacing? := true) S
 
-local instance: Xor (BitString n)  where
-  xor as bs := as.zipWith (·^^·) bs
+instance: Xor (BitString n)  where
+  xor as bs := as.zipWith bs (· ^^ ·)
+end Data/- }}} -/
 
 variable {l: Fin 7}               -- Possible values:  0,  1,   2,   3,   4,   5,    6
 abbrev w (l: Fin 7) := 2^l.val    -- Possible values:  1,  2,   4,   8,  16,  32,   64
 abbrev b (l: Fin 7) := 5 * 5 * w l-- Possible values: 25, 50, 100, 200, 400, 800, 1600
 
 namespace Keccak/- {{{ -/
+section Data/- {{{ -/
 
 /-- The state of the KeccakP function -/
 structure StateArray (l: Fin 7) where
@@ -84,6 +87,7 @@ def lane(A: StateArray l): BitString (w l) := Vector.ofFn (A.get x y ·)
 instance: Repr (StateArray l) where reprPrec A _ := A.toVector.pDump
 
 end StateArray/- }}} -/
+end Data/- }}} -/
 
 section «Step Mappings»/- {{{ -/
 
@@ -121,13 +125,17 @@ def ι.rc (t: Nat) := Id.run do
     R := R'.take 8
   return R.get 0
 
-def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
+def ι.RC {l: Fin 7}(iᵣ: Nat): BitString (w l) := Id.run do 
   let mut RC: BitString (w l) := BitString.filled (w l) 0
   for j in List.finRange (l.val + 1) do -- inclusive range!
     have j_valid_idx := calc  2 ^ ↑j - 1
         _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
         _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
-    RC := RC.set (2^↑j - 1) (ι.rc (↑j + 7*iᵣ)) j_valid_idx
+    RC := RC.set (2^j.val - 1) (ι.rc (↑j + 7*iᵣ)) j_valid_idx
+  RC
+
+def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
+  let mut RC := ι.RC iᵣ
   return StateArray.ofFn fun
     | (0, 0, z) => A.get 0 0 z ^^ RC.get z
     | (x, y, z) => A.get x y z
@@ -157,7 +165,7 @@ end Keccak/- }}} -/
 
 section Sponge/- {{{ -/
 
-def sponge.squeze
+def sponge.squeeze
     (f: BitString (b l) → BitString (b l))
     (r: Nat)
     [NeZero r]
@@ -169,7 +177,7 @@ def sponge.squeze
     ⟨Z.take d, by simp [Nat.min_eq_left h]⟩
   else
     let S := f S
-    sponge.squeze f r (Z ++ S.toArray.take r) S
+    sponge.squeeze f r (Z ++ S.toArray.take r) S
 
 termination_by d - Z.size
 decreasing_by
@@ -197,7 +205,11 @@ def sponge{l: Fin 7}
   assert! P.size % r == 0
   let n := P.size / r
   let c := (b l) - r
-  let Ps := P.chunks r
+  /- let P i := P.extract (r*i) (r*(i+1)) -/ 
+  -- ↑ For Lean to accept this it requires extra hypothesis to prove
+  --     ⊢ min (r*(i+1)) P.size - r*i = r <-> r*(i+1) < P.size <-> r*n < P.size
+  -- This proof belongs rather in a theorem about chunks_exact
+  let Ps := P.chunks_exact r
   assert! Ps.size = n
   Id.run do
   let mut S: BitString (b l) := BitString.filled (b l) false
@@ -205,7 +217,7 @@ def sponge{l: Fin 7}
     S := f (S ^^^ (Pᵢ.adjust (b l) false))
     assert! (Pᵢ.adjust (b l) false).toArray ==
             (Pᵢ ++ BitString.filled c false).toArray
-  let hash :=  sponge.squeze f r (S.toArray.take r) S
+  let hash :=  sponge.squeeze f r (S.toArray.take r) S
   return hash
 
 /-- The padding rule for K ECCAK, called multi-rate padding -/
@@ -223,16 +235,17 @@ private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
 private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[1,1]
 
 -- Hash functions
-def SHA3_224   (M : Array Bit)         := Keccak (c := 2*224) (M ++ SHA3_suffix    ) 224
-def SHA3_256   (M : Array Bit)         := Keccak (c := 2*256) (M ++ SHA3_suffix    ) 256
-def SHA3_384   (M : Array Bit)         := Keccak (c := 2*384) (M ++ SHA3_suffix    ) 384
-def SHA3_512   (M : Array Bit)         := Keccak (c := 2*512) (M ++ SHA3_suffix    ) 512
+def SHA3_224   (M : Array Bit)         := Keccak (c := ( 448: Fin 1600)) (M ++ SHA3_suffix    ) 224
+def SHA3_256   (M : Array Bit)         := Keccak (c := ( 512: Fin 1600)) (M ++ SHA3_suffix    ) 256
+def SHA3_384   (M : Array Bit)         := Keccak (c := ( 768: Fin 1600)) (M ++ SHA3_suffix    ) 384
+def SHA3_512   (M : Array Bit)         := Keccak (c := (1024: Fin 1600)) (M ++ SHA3_suffix    ) 512
 
 -- XOF functions
-def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c := 2*128) (M ++ SHAKE_suffix   )   d
-def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c := 2*256) (M ++ SHAKE_suffix   )   d
+def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c := (256: Fin 1600)) (M ++ SHAKE_suffix   )   d
+def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c := (512: Fin 1600)) (M ++ SHAKE_suffix   )   d
 
-def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c := 2*128) (M ++ RawSHAKE_suffix)   d
-def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c := 2*256) (M ++ RawSHAKE_suffix)   d
+def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c := (256: Fin 1600)) (M ++ RawSHAKE_suffix)   d
+def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c := (512: Fin 1600)) (M ++ RawSHAKE_suffix)   d
+-- ≤
 
 end Spec/- }}} -/
