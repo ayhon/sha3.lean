@@ -69,7 +69,7 @@ def randomChar: IO Char := do
   let lo2 := 0x110000
   let hi2 := 0xdfff
   let val ← IO.rand 0 ↑(hi1-1 + (hi2-lo2-1))
-  let val := UInt32.ofBitVec <| BitVec.ofFin <| Fin.ofNat' _ val
+  let val := UInt32.mk <| BitVec.ofFin <| Fin.ofNat' _ val
   if h: val < 0xd800 then
     have valid := by 
       obtain ⟨⟨⟨val, val_lt⟩⟩⟩ := val
