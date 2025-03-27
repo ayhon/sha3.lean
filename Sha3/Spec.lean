@@ -17,7 +17,7 @@ instance: ToString (BitString n) where toString S := repr S |> toString
 private def BitString.pDump (S: BitString n) := Utils.dump (spacing? := true) S
 
 instance: Xor (BitString n)  where
-  xor as bs := as.zipWith bs (· ^^ ·)
+  xor as bs := as.zipWith (· ^^ ·) bs 
 end Data/- }}} -/
 
 variable {l: Fin 7}               -- Possible values:  0,  1,   2,   3,   4,   5,    6
