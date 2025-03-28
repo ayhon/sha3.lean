@@ -4,20 +4,10 @@ local instance: OfNat Bool 0 where ofNat := false
 local instance: OfNat Bool 1 where ofNat := true
 local instance(x: Fin n): NeZero (n - x) where out := by omega
 
-
 namespace Spec/- {{{ -/
 section Data/- {{{ -/
 abbrev Bit := Bool
-abbrev BitString (n: Nat) := Vector Bit n
 
-def BitString.filled(n: Nat)(default: Bit): BitString n := Vector.mkVector n default
-
-instance: Repr (BitString n) where reprPrec S _ := Utils.dump (spacing? := false) S
-instance: ToString (BitString n) where toString S := repr S |> toString
-private def BitString.pDump (S: BitString n) := Utils.dump (spacing? := true) S
-
-instance: Xor (BitString n)  where
-  xor as bs := as.zipWith (· ^^ ·) bs 
 end Data/- }}} -/
 
 variable {l: Fin 7}               -- Possible values:  0,  1,   2,   3,   4,   5,    6
@@ -29,8 +19,8 @@ section Data/- {{{ -/
 
 /-- The state of the KeccakP function -/
 structure StateArray (l: Fin 7) where
-  ofVector ::
-  toVector : BitString (b l)
+  ofBitVec ::
+  toBitVec : BitVec (b l)
   deriving Inhabited
 
 namespace StateArray/- {{{ -/
@@ -69,32 +59,31 @@ def encodeIndex: Fin (b l) :=
     exact y.isLt
   ⟨w l * (5 * y + x) + z, this⟩
 
-def map(f: Bit → Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.map f
-
 /-- Given a function f which takes x, y and z, return a state array A' where
     A'[x,y,z] = f x y z -/
 def ofFn(f: Fin 5 × Fin 5 × Fin (w l) → Bit): StateArray l := 
-  .ofVector <| Vector.ofFn (f ∘ decodeIndex)
+  .ofBitVec <| BitVec.ofFn (f ∘ decodeIndex)
 
-def get(A: StateArray l): Bit := A.toVector.get <| encodeIndex x y z
+def get(A: StateArray l): Bit := A.toBitVec[encodeIndex x y z]
 
-def set(val: Bit)(A: StateArray l): StateArray l := .ofVector <| A.toVector.set (encodeIndex x y z) val
+def set(val: Bit)(A: StateArray l): StateArray l := .ofBitVec <| A.toBitVec.set (encodeIndex x y z) val
 
-def row (A: StateArray l): BitString 5     := Vector.ofFn (A.get · y z)
-def col (A: StateArray l): BitString 5     := Vector.ofFn (A.get x · z)
-def lane(A: StateArray l): BitString (w l) := Vector.ofFn (A.get x y ·)
+def row (A: StateArray l): BitVec 5     := BitVec.ofFn (A.get · y z)
+def col (A: StateArray l): BitVec 5     := BitVec.ofFn (A.get x · z)
+def lane(A: StateArray l): BitVec (w l) := BitVec.ofFn (A.get x y ·)
 
-instance: Repr (StateArray l) where reprPrec A _ := A.toVector.pDump
+instance: Repr (StateArray l) where reprPrec A _ := Utils.dump (spacing? := true) A.toBitVec
 
 end StateArray/- }}} -/
 end Data/- }}} -/
 
 section «Step Mappings»/- {{{ -/
 
+def θ.C (A: StateArray l) x z := A.get x 0 z ^^ A.get x 1 z ^^ A.get x 2 z ^^ A.get x 3 z ^^ A.get x 4 z
+def θ.D (A: StateArray l) x z := C A (x-1) z ^^ C A (x+1) (z-1)
 def θ(A: StateArray l): StateArray l := 
-  let C x z := A.get x 0 z ^^ A.get x 1 z ^^ A.get x 2 z ^^ A.get x 3 z ^^ A.get x 4 z
-  let D x z := C (x-1) z ^^ C (x+1) (z-1)
-  StateArray.ofFn fun (x,y,z) => (A.get x y z) ^^ D x z
+  StateArray.ofFn fun (x,y,z) => (A.get x y z) ^^ θ.D A x z
+
 
 def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
 def ρ(A: StateArray l): StateArray l := 
@@ -115,29 +104,29 @@ def χ(A: StateArray l): StateArray l :=
 def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
   if t = 0 then return true  
-  let mut R: BitString 8 := #v[1,0,0,0, 0,0,0,0]
+  let mut R: BitVec 8 := (0#7).concat true -- #v[1,0,0,0, 0,0,0,0]
   for i in [1:t+1] do -- inclusive range!
-    let R': BitString 9 := ⟨#[0] ++ R.toArray, by simp⟩
+    let R': BitVec 9 := R.concat false
     let R' := R'.set 0 <| R'[0] ^^ R'[8]
     let R' := R'.set 4 <| R'[4] ^^ R'[8]
     let R' := R'.set 5 <| R'[5] ^^ R'[8]
     let R' := R'.set 6 <| R'[6] ^^ R'[8]
-    R := R'.take 8
-  return R.get 0
+    R := R'.truncate 8
+  return R[0]
 
-def ι.RC {l: Fin 7}(iᵣ: Nat): BitString (w l) := Id.run do 
-  let mut RC: BitString (w l) := BitString.filled (w l) 0
+def ι.RC {l: Fin 7}(iᵣ: Nat): BitVec (w l) := Id.run do 
+  let mut RC: BitVec (w l) := BitVec.fill (w l) 0
   for j in List.finRange (l.val + 1) do -- inclusive range!
     have j_valid_idx := calc  2 ^ ↑j - 1
         _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
         _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
-    RC := RC.set (2^j.val - 1) (ι.rc (↑j + 7*iᵣ)) j_valid_idx
+    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ)) 
   RC
 
 def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
   let mut RC := ι.RC iᵣ
   return StateArray.ofFn fun
-    | (0, 0, z) => A.get 0 0 z ^^ RC.get z
+    | (0, 0, z) => A.get 0 0 z ^^ RC[z]
     | (x, y, z) => A.get x y z
 
 end «Step Mappings»/- }}} -/
@@ -152,11 +141,11 @@ def Rnd(A: StateArray l)(iᵣ: Nat) :=
   A'
 
 /-- The permutation function Keccak-p[b,nᵣ], defined in terms of l instead of b. -/
-def P(l: Fin 7)(nᵣ: Nat)(S: BitString (b l)): BitString (b l) := Id.run do
-  let mut A := StateArray.ofVector S
+def P(l: Fin 7)(nᵣ: Nat)(S: BitVec (b l)): BitVec (b l) := Id.run do
+  let mut A := StateArray.ofBitVec S
   for iᵣ in [(12 + 2*↑l) - nᵣ: (12 + 2*↑l) - 1 + 1] do -- inclusive range!
     A := Rnd A iᵣ
-  return A.toVector
+  return A.toBitVec
 
 /-- The Keccak-f[b] family of permutations, defined in terms of l instead of b. -/
 def F l := Keccak.P l (nᵣ:= 12 + 2*l)
@@ -165,21 +154,40 @@ end Keccak/- }}} -/
 
 section Sponge/- {{{ -/
 
+def sponge.absorb{l: Fin 7}
+  (f: BitVec (b l) → BitVec (b l))
+  (pad: Nat → Nat → Array Bit)
+  (r: Nat) [NeZero r]
+  (N: Array Bit)
+: BitVec (b l) := 
+  let P := N ++ pad r N.size
+  assert! P.size % r == 0
+  let n := P.size / r
+  let c := (b l) - r
+  let Ps := P.chunks_exact r
+  assert! Ps.size = n
+  Id.run do
+  let mut S: BitVec (b l) := BitVec.fill (b l) false
+  for Pᵢ in Ps do
+    S := f (S ^^^ (BitVec.ofBoolListLE Pᵢ.toList).setWidth (b l))
+    assert! ((BitVec.ofBoolListLE Pᵢ.toList).setWidth (b l)).toArray ==
+            (BitVec.fill c false ++(BitVec.ofBoolListLE Pᵢ.toList)).toArray
+  return S
+
 def sponge.squeeze
-    (f: BitString (b l) → BitString (b l))
-    (r: Nat)
-    [NeZero r]
-    (Z: Array Bit)
-    (S: BitString (b l))
-: BitString d
+    (f: BitVec (b l) → BitVec (b l))
+    (r: Nat) [NeZero r]
+    (Z: BitVec m)
+    (S: BitVec (b l))
+: BitVec d
 := 
-  if h: d <= Z.size then
-    ⟨Z.take d, by simp [Nat.min_eq_left h]⟩
+  if d <= m then
+    Z.setWidth d
   else
     let S := f S
-    sponge.squeeze f r (Z ++ S.toArray.take r) S
+    sponge.squeeze f r (S.truncate r ++ Z) S
 
-termination_by d - Z.size
+termination_by d - m
 decreasing_by
   have: (b l) >= 1 := Nat.mul_pos (by decide) (Nat.two_pow_pos l.val)
   have: r >= 1 := Nat.pos_of_ne_zero NeZero.out
@@ -194,36 +202,20 @@ arbitrary output length. The construction employs the following three components
  · A padding rule, denoted by pad.
 -/
 def sponge{l: Fin 7}
-  (f: BitString (b l) → BitString (b l))
+  (f: BitVec (b l) → BitVec (b l))
   (pad: Nat → Nat → Array Bit)
-  (r: Nat) -- non-negative integer
-  [NeZero r]
+  (r: Nat) [NeZero r]
   (N: Array Bit)
   (d: Nat)
-: BitString d := 
-  let P := N ++ pad r N.size
-  assert! P.size % r == 0
-  let n := P.size / r
-  let c := (b l) - r
-  /- let P i := P.extract (r*i) (r*(i+1)) -/ 
-  -- ↑ For Lean to accept this it requires extra hypothesis to prove
-  --     ⊢ min (r*(i+1)) P.size - r*i = r <-> r*(i+1) < P.size <-> r*n < P.size
-  -- This proof belongs rather in a theorem about chunks_exact
-  let Ps := P.chunks_exact r
-  assert! Ps.size = n
-  Id.run do
-  let mut S: BitString (b l) := BitString.filled (b l) false
-  for Pᵢ in Ps do
-    S := f (S ^^^ (Pᵢ.adjust (b l) false))
-    assert! (Pᵢ.adjust (b l) false).toArray ==
-            (Pᵢ ++ BitString.filled c false).toArray
-  let hash :=  sponge.squeeze f r (S.toArray.take r) S
-  return hash
+: BitVec d := 
+  let S := sponge.absorb f pad r N
+  let hash := sponge.squeeze f r (S.truncate r) S
+  hash
 
 /-- The padding rule for K ECCAK, called multi-rate padding -/
 def «pad10*1»(x m: Nat): Array Bit := 
   let j := Int.toNat <| (- (m: Int) - 2) % x
-  (#v[true] ++ BitString.filled j false ++ #v[true]).toArray
+  (1#1 ++ 0#j ++ 1#1).toArray
 
 end Sponge/- }}} -/
 
