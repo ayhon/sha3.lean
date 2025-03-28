@@ -15,7 +15,7 @@ theorem encode_decode(x: Fin 5)(y: Fin 5)(z: Fin (w l))
     rw [Nat.add_comm]
     rw [Nat.add_mul_div_left x _ (by decide), Nat.div_eq_of_lt x_lt]
     simp
-  · simp [Nat.mod_eq_iff]; right; simp [z_lt]; exists 0
+  · simp [Nat.mod_eq_of_lt z_lt]
   · rw [Nat.add_comm]
     rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
-    simp [Nat.mod_eq_iff]; simp [x_lt]; exists 0
+    simp [Nat.mod_eq_of_lt x_lt]
