@@ -137,8 +137,9 @@ def main(_args: List String): IO Unit := do
   errors := errors.append <| ←testVectors
 
   if ¬ errors.isEmpty then
-    IO.println "ERRORS"
+    IO.println "ERRORS:"
     IO.println <| "\n".intercalate errors.toList
+    throw <| IO.userError "Errors found (see command output)"
   else
     IO.println "SUCCESS"
 
