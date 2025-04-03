@@ -99,7 +99,7 @@ def String.toBitVecLE(s: String) := ByteArray.toBitVecLE <| toUTF8 s
 def String.toBitVecBE(s: String) := ByteArray.toBitVecBE <| toUTF8 s
 
 def BitVec.toArray(bv: BitVec n): Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn(f: Fin n → Bool): BitVec n := by simpa using BitVec.ofBoolListLE <| List.ofFn f
+def BitVec.ofFn(f: Fin n → Bool): BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).setWidth n
 def BitVec.set(i:Fin n)(b: Bool)(bv: BitVec n): BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
 
 /- def Utils.toNat(S: Vector Bool n): Nat := S.mapIdx (2^· * if · then 1 else 0) |>.toList |>.sum -/
