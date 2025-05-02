@@ -59,7 +59,7 @@ def runPython(ty: Sha3FuncType)(S: String): IO String := do
 def testOn(msg: String)(ty: Sha3FuncType)(getExpected: IO String): IO (Except String Unit) := do
 /- def testOn(ty: Sha3FuncType)(msg: String): IO (Except String Unit) := do -/
   let expected ← getExpected
-  let actual := toString <| ty.toFunc msg.toBitVecLE.toArray
+  let actual := ty.toFunc msg.toBitVecLE.toArray
   if expected ≠ actual then
     return .error s!"{ty}: Error on {msg}, \n\texpected = {expected}\n\tactual = {actual}"
   else
