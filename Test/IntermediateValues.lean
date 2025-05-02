@@ -83,7 +83,7 @@ def testWithExpected[BEq α][ToString α](expected: α) (actual: Id α): Bool :=
     |>.setWidth (b 6)
   let r := 239
   let d := 128
-  input |> (fun S => sponge.squeeze (f := Keccak.P 6 (nᵣ := 24)) r (S.truncate r) S)
+  input |> (fun S => sponge.squeeze (f := Keccak.P 6 (nᵣ := 24)) r 0#0 S)
     |>  @Utils.dump d (spacing? := false) |> toString
                      
 #guard testWithExpected "6173c86bd9fcc901c89c7130754132a08dd1043b" do
@@ -91,7 +91,7 @@ def testWithExpected[BEq α][ToString α](expected: α) (actual: Id α): Bool :=
     |>.setWidth (b 6)
   let r := 18
   let d := 160
-  input |> (fun S => sponge.squeeze (f := Keccak.P 6 (nᵣ := 24)) r (S.truncate r) S)
+  input |> (fun S => sponge.squeeze (f := Keccak.P 6 (nᵣ := 24)) r 0#0 S)
     |>  @Utils.dump d (spacing? := false) |> toString
 
 

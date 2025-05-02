@@ -188,8 +188,7 @@ def sponge.squeeze
   if d <= m then
     Z.setWidth d
   else
-    let S := f S
-    sponge.squeeze f r (S.truncate r ++ Z) S
+    sponge.squeeze f r (S.truncate r ++ Z) (f S)
 
 termination_by d - m
 decreasing_by
@@ -213,7 +212,7 @@ def sponge{l: Fin 7}
   (d: Nat)
 : BitVec d :=
   let S := sponge.absorb f pad r N
-  let hash := sponge.squeeze f r (S.truncate r) S
+  let hash := sponge.squeeze f r 0#0 S
   hash
 
 end Sponge/- }}} -/
