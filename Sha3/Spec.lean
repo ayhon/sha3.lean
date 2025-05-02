@@ -152,6 +152,12 @@ end Keccak/- }}} -/
 
 section Sponge/- {{{ -/
 
+/-- The padding rule for Keccak, called multi-rate padding -/
+def «pad10*1»(x m: Nat): Array Bit :=
+  let j := Int.toNat <| (- (m: Int) - 2) % x
+  (1#1 ++ 0#j ++ 1#1).toArray
+
+
 def sponge.absorb{l: Fin 7}
   (f: BitVec (b l) → BitVec (b l))
   (pad: Nat → Nat → Array Bit)
@@ -209,11 +215,6 @@ def sponge{l: Fin 7}
   let S := sponge.absorb f pad r N
   let hash := sponge.squeeze f r (S.truncate r) S
   hash
-
-/-- The padding rule for K ECCAK, called multi-rate padding -/
-def «pad10*1»(x m: Nat): Array Bit := 
-  let j := Int.toNat <| (- (m: Int) - 2) % x
-  (1#1 ++ 0#j ++ 1#1).toArray
 
 end Sponge/- }}} -/
 
