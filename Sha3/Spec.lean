@@ -26,7 +26,7 @@ variable (x: Fin 5)(y: Fin 5)(z: Fin (w l))(c: Fin (b l))
 
 /-- Transforms an index in the in-memory representation of the StateArray
     to the indices in the 3-dimensional presentation of the specification. -/
-def decodeIndex: Fin 5 × Fin 5 × Fin (w l) := 
+def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
     have x_lt := by apply Nat.mod_lt; decide
     have y_lt := by
       obtain ⟨_, _⟩ := c
@@ -42,14 +42,14 @@ def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
 
 /-- Transforms the indices in the 3-dimensional presentation of the specification
     to the in-memory representation of the StateArray. -/
-def encodeIndex: Fin (b l) := 
-  have := by 
+def encodeIndex: Fin (b l) :=
+  have := by
     have: z / w l = (0 : Nat) := by
       obtain ⟨_,_⟩ := z; simp
       apply Nat.div_eq_zero_iff_lt (by apply Nat.two_pow_pos : 0 < w l) |>.mpr (by assumption)
     apply Nat.div_lt_iff_lt_mul (by apply Nat.two_pow_pos l) |>.mp
     rw [Nat.mul_add_div (by apply Nat.two_pow_pos l) _ z.val, this, Nat.add_zero]
-    have: x / 5 = (0: Nat) := by 
+    have: x / 5 = (0: Nat) := by
       obtain ⟨_,_⟩ := x; simp
       apply Nat.div_eq_zero_iff_lt (by decide: 0 < 5) |>.mpr (by assumption)
     apply Nat.div_lt_iff_lt_mul (by decide: 0 < 5) |>.mp
@@ -59,7 +59,7 @@ def encodeIndex: Fin (b l) :=
 
 /-- Given a function f which takes x, y and z, return a state array A' where
     A'[x,y,z] = f x y z -/
-def ofFn(f: Fin 5 × Fin 5 × Fin (w l) → Bit): StateArray l := 
+def ofFn(f: Fin 5 × Fin 5 × Fin (w l) → Bit): StateArray l :=
   .ofBitVec <| BitVec.ofFn (f ∘ decodeIndex)
 
 def get(A: StateArray l): Bit := A.toBitVec[encodeIndex x y z]
@@ -79,12 +79,12 @@ section «Step Mappings»/- {{{ -/
 
 def θ.C (A: StateArray l) x z := A.get x 0 z ^^ A.get x 1 z ^^ A.get x 2 z ^^ A.get x 3 z ^^ A.get x 4 z
 def θ.D (A: StateArray l) x z := C A (x-1) z ^^ C A (x+1) (z-1)
-def θ(A: StateArray l): StateArray l := 
+def θ(A: StateArray l): StateArray l :=
   StateArray.ofFn fun (x,y,z) => (A.get x y z) ^^ θ.D A x z
 
 
 def ρ.offset(t: Nat) := Fin.ofNat' (w l) $ (t + 1) * (t + 2) / 2
-def ρ(A: StateArray l): StateArray l := 
+def ρ(A: StateArray l): StateArray l :=
   Id.run do
   let mut (x, y): Fin 5 × Fin 5 := (1,0)
   let mut A' := A
@@ -101,7 +101,7 @@ def χ(A: StateArray l): StateArray l :=
 
 def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
-  if t = 0 then return true  
+  if t = 0 then return true
   let mut R: BitVec 8 := (0#7).concat true -- #v[1,0,0,0, 0,0,0,0]
   for i in [1:t+1] do -- inclusive range!
     let R': BitVec 9 := R.concat false
@@ -118,7 +118,7 @@ def ι.RC {l: Fin 7}(iᵣ: Nat): BitVec (w l) := Id.run do
     have j_valid_idx := calc  2 ^ ↑j - 1
         _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
         _ ≤ 2 ^ ↑l := Nat.pow_le_pow_iff_right (by decide) |>.mpr <| Fin.is_le j
-    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ)) 
+    RC := RC.set ⟨2^j.val - 1, j_valid_idx⟩ (ι.rc (↑j + 7*iᵣ))
   RC
 
 def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
@@ -129,7 +129,7 @@ def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
 
 end «Step Mappings»/- }}} -/
 
-def Rnd(A: StateArray l)(iᵣ: Nat) := 
+def Rnd(A: StateArray l)(iᵣ: Nat) :=
   let A' := A
   let A' := θ A'
   let A' := ρ A'
@@ -157,7 +157,7 @@ def sponge.absorb{l: Fin 7}
   (pad: Nat → Nat → Array Bit)
   (r: Nat) [NeZero r]
   (N: Array Bit)
-: BitVec (b l) := 
+: BitVec (b l) :=
   let P := N ++ pad r N.size
   assert! P.size % r == 0
   let n := P.size / r
@@ -195,8 +195,8 @@ decreasing_by
 /--
 The sponge construction is a framework for specifying functions on binary data with
 arbitrary output length. The construction employs the following three components:
- · An underlying function on fixed-length strings, denoted by f, 
- · A parameter called the rate, denoted by r, and 
+ · An underlying function on fixed-length strings, denoted by f,
+ · A parameter called the rate, denoted by r, and
  · A padding rule, denoted by pad.
 -/
 def sponge{l: Fin 7}
