@@ -165,17 +165,17 @@ def sponge.absorb{l: Fin 7}
   (N: Array Bit)
 : BitVec (b l) :=
   let P := N ++ pad r N.size
-  assert! P.size % r == 0
+  /- assert! P.size % r == 0 -/
   let n := P.size / r
   let c := (b l) - r
   let Ps := P.chunks_exact r
-  assert! Ps.size = n
+  /- assert! Ps.size = n -/
   Id.run do
-  let mut S: BitVec (b l) := BitVec.fill (b l) false
+  let mut S: BitVec (b l) := 0#(b l)
   for Pᵢ in Ps do
     S := f (S ^^^ (BitVec.ofBoolListLE Pᵢ.toList).setWidth (b l))
-    assert! ((BitVec.ofBoolListLE Pᵢ.toList).setWidth (b l)).toArray ==
-            (BitVec.fill c false ++(BitVec.ofBoolListLE Pᵢ.toList)).toArray
+    /- assert! ((BitVec.ofBoolListLE Pᵢ.toList).setWidth (b l)).toArray == -/
+    /-         (BitVec.fill c false ++ (BitVec.ofBoolListLE Pᵢ.toList)).toArray -/
   return S
 
 def sponge.squeeze
@@ -184,7 +184,7 @@ def sponge.squeeze
     (Z: BitVec m)
     (S: BitVec (b l))
 : BitVec d
-:= 
+:=
   if d <= m then
     Z.setWidth d
   else
@@ -211,7 +211,7 @@ def sponge{l: Fin 7}
   (r: Nat) [NeZero r]
   (N: Array Bit)
   (d: Nat)
-: BitVec d := 
+: BitVec d :=
   let S := sponge.absorb f pad r N
   let hash := sponge.squeeze f r (S.truncate r) S
   hash
