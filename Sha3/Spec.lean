@@ -1,8 +1,6 @@
 import Sha3.Utils
 
-local instance: OfNat Bool 0 where ofNat := false
-local instance: OfNat Bool 1 where ofNat := true
-local instance(x: Fin n): NeZero (n - x) where out := by omega
+@[simp] local instance(x: Fin n): NeZero (n - x) where out := by omega
 
 namespace Spec/- {{{ -/
 section Data/- {{{ -/
@@ -98,8 +96,8 @@ def ρ(A: StateArray l): StateArray l :=
 
 def π(A: StateArray l): StateArray l := StateArray.ofFn fun (x,y,z) => A.get (x + 3*y) x z
 
-def χ(A: StateArray l): StateArray l := 
-  StateArray.ofFn fun (x,y,z) => A.get x y z ^^ ((A.get (x+1) y z ^^ 1) && A.get (x+2) y z)
+def χ(A: StateArray l): StateArray l :=
+  StateArray.ofFn fun (x,y,z) => A.get x y z ^^ ((A.get (x+1) y z ^^ true) && A.get (x+2) y z)
 
 def ι.rc (t: Nat) := Id.run do
   let t := Fin.ofNat' 255 t
@@ -114,8 +112,8 @@ def ι.rc (t: Nat) := Id.run do
     R := R'.truncate 8
   return R[0]
 
-def ι.RC {l: Fin 7}(iᵣ: Nat): BitVec (w l) := Id.run do 
-  let mut RC: BitVec (w l) := BitVec.fill (w l) 0
+def ι.RC {l: Fin 7}(iᵣ: Nat): BitVec (w l) := Id.run do
+  let mut RC: BitVec (w l) := 0#(w l)
   for j in List.finRange (l.val + 1) do -- inclusive range!
     have j_valid_idx := calc  2 ^ ↑j - 1
         _ < 2 ^ ↑j := Nat.pred_lt (Nat.ne_of_gt (Nat.two_pow_pos j.val))
@@ -222,9 +220,10 @@ end Sponge/- }}} -/
 /-- The Keccak[c] family of sponge functions, restricted to b = 1600 (or l = 6) -/
 def Keccak(c: Fin (b 6)):= sponge (f := Keccak.P 6 (nᵣ := 24)) (pad := «pad10*1») (r := (b 6) - c)
 
-private abbrev SHA3_suffix:     Array Bit := #[0,1]
-private abbrev RawSHAKE_suffix: Array Bit := #[1,1]
-private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[1,1]
+
+private abbrev SHA3_suffix:     Array Bit := #[false, true]
+private abbrev RawSHAKE_suffix: Array Bit := #[true,  true]
+private abbrev SHAKE_suffix:    Array Bit := RawSHAKE_suffix ++ #[true,  true]
 
 -- Hash functions
 def SHA3_224   (M : Array Bit)         := Keccak (c := ( 448: Fin 1600)) (M ++ SHA3_suffix    ) 224
