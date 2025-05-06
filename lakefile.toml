@@ -6,9 +6,9 @@ testDriver = "Test"
 [[lean_lib]]
 name = "Sha3"
 
-[[lean_lib]]
-name = "Test"
-extraDepTargets = ["Sha3"]
+# [[lean_lib]]
+# name = "Test"
+# extraDepTargets = ["Sha3"]
 
 [[lean_exe]]
 name = "Test"
@@ -20,7 +20,6 @@ name = "Cli"
 srcDir = "Sha3"
 root = "Cli"
 
-# [[require]]
-# name = "mathlib"
-# git = "https://github.com/leanprover-community/mathlib4"
-# rev = "v4.17.0"
+[[require]]
+name = "aeneas"
+path = "/home/ayhon/inria/aeneas/backends/lean"

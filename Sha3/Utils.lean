@@ -84,7 +84,7 @@ def String.toBitVecBE(s: String) := ByteArray.toBitVecBE <| toUTF8 s
 
 def BitVec.toList(bv: BitVec n): List Bool := List.finRange n |>.map (bv[·])
 def BitVec.toArray(bv: BitVec n): Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn(f: Fin n → Bool): BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast (List.length_ofFn f)
+def BitVec.ofFn(f: Fin n → Bool): BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast List.length_ofFn
 def BitVec.set(i: Fin n)(b: Bool)(bv: BitVec n): BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
 
 def BitVec.toByteArray(bv: BitVec n): ByteArray :=
