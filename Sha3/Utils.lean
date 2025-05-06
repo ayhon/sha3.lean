@@ -1,5 +1,7 @@
 import Init.Data.Nat.Div.Lemmas
 
+def Vector.setWidth[Inhabited α](v: Vector α n)(m: Nat): Vector α m := (v.take m ++ mkVector (m-n) (default: α)).cast (by simp [←Nat.sub_sub_eq_min])
+
 def Array.chunks_exact(k: Nat)(arr: Array α): Array (Vector α k) :=
   /- assert! arr.size % k == 0 -/
   if h: arr.size < k ∨ k = 0 then 
