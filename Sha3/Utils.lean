@@ -1,3 +1,4 @@
+import Aeneas.BitVec
 import Init.Data.Nat.Div.Lemmas
 
 def Vector.setWidth[Inhabited α](v: Vector α n)(m: Nat): Vector α m := (v.take m ++ mkVector (m-n) (default: α)).cast (by simp [←Nat.sub_sub_eq_min])
@@ -85,19 +86,6 @@ def String.toBitVecLE(s: String) := ByteArray.toBitVecLE <| toUTF8 s
 def String.toBitVecBE(s: String) := ByteArray.toBitVecBE <| toUTF8 s
 
 def BitVec.toList(bv: BitVec n): List Bool := List.finRange n |>.map (bv[·])
-def BitVec.toArray(bv: BitVec n): Array Bool := Array.finRange n |>.map (bv[·])
-def BitVec.ofFn(f: Fin n → Bool): BitVec n := (BitVec.ofBoolListLE <| List.ofFn f).cast List.length_ofFn
-def BitVec.set(i: Fin n)(b: Bool)(bv: BitVec n): BitVec n := bv ^^^ (((bv[i] ^^ b).toNat : BitVec n) <<< i.val)
-
-def BitVec.toByteArray(bv: BitVec n): ByteArray :=
-  let paddedLen := (n + 7)/8
-  let bv' := bv.setWidth (paddedLen*8)
-  ByteArray.mk <| Array.finRange paddedLen
-    |>.map fun i =>
-      let x := List.finRange 8 |>.map (fun o => 
-        2^o.val * if bv'[8*i.val+o.val]'(by omega) then 1 else 0
-      ) |>.sum
-      UInt8.ofNat x
 
 open Std.Format in 
 def Utils.dump (S: BitVec n)(spacing? : Bool := false): Std.Format :=

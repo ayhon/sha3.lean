@@ -1,3 +1,4 @@
+import Aeneas.BitVec
 import Sha3.Utils
 
 @[simp] local instance(x: Fin n): NeZero (n - x) where out := by omega
