@@ -1,7 +1,7 @@
 import Aeneas.BitVec
 import Init.Data.Nat.Div.Lemmas
 
-def Vector.setWidth[Inhabited α](v: Vector α n)(m: Nat): Vector α m := (v.take m ++ mkVector (m-n) (default: α)).cast (by simp [←Nat.sub_sub_eq_min])
+def Vector.setWidth[Inhabited α](v: Vector α n)(m: Nat): Vector α m := (v.take m ++ replicate (m-n) (default: α)).cast (by simp [←Nat.sub_sub_eq_min])
 
 def Array.chunks_exact(k: Nat)(arr: Array α): Array (Vector α k) :=
   /- assert! arr.size % k == 0 -/
@@ -110,3 +110,31 @@ def Utils.dump (S: BitVec n)(spacing? : Bool := false): Std.Format :=
       nest 8 <| lineBreak? ++ formatted
     else
       formatted
+
+theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
+: n*y + x < n*m
+:= by
+  have n_pos: n > 0 := by omega
+  have m_pos: m > 0 := by omega
+  calc n*y + x
+    _ ≤ n * (m-1) + x := by
+      apply Nat.add_le_add_right
+      apply Nat.mul_le_mul_left
+      apply Nat.le_pred_iff_lt m_pos |>.mpr
+      assumption
+    _ ≤ n * (m-1) + (n-1) := by
+      apply Nat.add_le_add_left
+      apply Nat.le_pred_iff_lt n_pos |>.mpr
+      assumption
+    _ < n * m := by
+      simp [Nat.mul_sub, ←Nat.add_sub_assoc n_pos]
+      have: n*m > 0 := Nat.mul_pos n_pos m_pos
+      have: n*m >= n := by
+        conv => rhs; rw [←Nat.mul_one n]
+        apply Nat.mul_le_mul_left n m_pos
+      omega
+
+/- def Fin.pack(x: Fin n)(y: Fin m): Fin (n*m) where -/
+/-   val := n*y.val + x.val -/
+/-   isLt := Nat.lt_packing_right x.isLt y.isLt -/
+
