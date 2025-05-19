@@ -1,17 +1,17 @@
 name = "Sha3"
 version = "0.1.0"
 defaultTargets = ["Sha3", "Cli"]
-testDriver = "Test"
+testDriver = "TestExec"
 
 [[lean_lib]]
 name = "Sha3"
 
-# [[lean_lib]]
-# name = "Test"
-# extraDepTargets = ["Sha3"]
+[[lean_lib]]
+name = "Test"
+extraDepTargets = ["Sha3"]
 
 [[lean_exe]]
-name = "Test"
+name = "TestExec"
 srcDir = "Test"
 root = "Main"
 

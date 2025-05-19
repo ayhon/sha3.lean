@@ -34,7 +34,7 @@ def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
       apply Nat.div_lt_iff_lt_mul (by decide) |>.mpr
       apply Nat.div_lt_iff_lt_mul (by apply Nat.two_pow_pos) |>.mpr
       assumption
-    have z_lt := by apply Nat.mod_lt; simp [w]; exact Nat.two_pow_pos l
+    have z_lt := by apply Nat.mod_lt; simp only [w, gt_iff_lt]; exact Nat.two_pow_pos l
 
     let x: Fin 5 := ⟨(c / w l) % 5, x_lt⟩
     let y: Fin 5 := ⟨(c / w l) / 5, y_lt⟩
@@ -45,13 +45,13 @@ def decodeIndex: Fin 5 × Fin 5 × Fin (w l) :=
     to the in-memory representation of the StateArray. -/
 def encodeIndex: Fin (b l) :=
   have := by
-    have: z / w l = (0 : Nat) := by
-      obtain ⟨_,_⟩ := z; simp
+    have: (z / w l: Nat) = (0 : Nat) := by
+      obtain ⟨_,_⟩ := z; simp only
       apply Nat.div_eq_zero_iff_lt (by apply Nat.two_pow_pos : 0 < w l) |>.mpr (by assumption)
     apply Nat.div_lt_iff_lt_mul (by apply Nat.two_pow_pos l) |>.mp
     rw [Nat.mul_add_div (by apply Nat.two_pow_pos l) _ z.val, this, Nat.add_zero]
-    have: x / 5 = (0: Nat) := by
-      obtain ⟨_,_⟩ := x; simp
+    have: (x / 5: Nat) = (0: Nat) := by
+      obtain ⟨_,_⟩ := x; simp only
       apply Nat.div_eq_zero_iff_lt (by decide: 0 < 5) |>.mpr (by assumption)
     apply Nat.div_lt_iff_lt_mul (by decide: 0 < 5) |>.mp
     rw [Nat.mul_add_div (by decide: 0 < 5) _ x.val, this, Nat.add_zero]

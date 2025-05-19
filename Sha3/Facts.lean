@@ -8,14 +8,14 @@ theorem Spec.Keccak.StateArray.encode_decode(x: Fin 5)(y: Fin 5)(z: Fin (w l))
   simp [encodeIndex, decodeIndex]
   apply And.intro; case' right => apply And.intro
   · rw [Nat.add_comm]
-    rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
+    rw [Nat.add_mul_div_left z _ (by simp only [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
     simp
     rw [Nat.add_comm]
     rw [Nat.add_mul_div_left x _ (by decide), Nat.div_eq_of_lt x_lt]
     simp
   · simp [Nat.mod_eq_of_lt z_lt]
   · rw [Nat.add_comm]
-    rw [Nat.add_mul_div_left z _ (by simp [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
+    rw [Nat.add_mul_div_left z _ (by simp only [w]; exact Nat.two_pow_pos ↑l), Nat.div_eq_of_lt z_lt]
     simp [Nat.mod_eq_of_lt x_lt]
 
 theorem Spec.Keccak.StateArray.decode_encode(c: Fin (b l))
@@ -38,3 +38,9 @@ theorem Spec.Keccak.StateArray.encode_inj(x x' y y': Fin 5)(z z': Fin (w l))
     rw [encode_decode, encode_decode] at h
     simp at h; assumption
   case mpr => rintro ⟨rfl, rfl, rfl⟩; rfl
+
+theorem Spec.Keccak.ι.rc_mod_eq_rc(t: Nat)
+: Spec.Keccak.ι.rc (t % 255) = Spec.Keccak.ι.rc t
+:= by
+  have: Fin.ofNat' 255 (↑t % 255) = Fin.ofNat' 255 ↑t := by simp [Fin.ofNat']
+  rw [rc, this, ←rc]

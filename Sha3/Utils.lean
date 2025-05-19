@@ -44,7 +44,6 @@ def Array.extract_size_of_chunks_exact(P: Array α)(r: Nat)
         _ <= P.size := by simp [n]; rw [Nat.mul_comm]; exact Nat.div_mul_le_self P.size r
     simp [Nat.min_eq_left this]
     simp [←Nat.mul_sub_left_distrib _ _ _]
-    simp [Nat.add_sub_self_left]
 
 def Array.chunks (k: Nat)(arr: Array α): Array (Array α) := 
   if arr.size = 0 ∨ k = 0 then #[] else #[arr.take k] ++ (arr.extract k arr.size |>.chunks k)
