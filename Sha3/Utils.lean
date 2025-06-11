@@ -86,8 +86,10 @@ def String.toBitVecBE(s: String) := ByteArray.toBitVecBE <| toUTF8 s
 
 def BitVec.toList(bv: BitVec n): List Bool := List.finRange n |>.map (bv[·])
 
+def Vector.toBitVecLE(vec: Vector Bool n): BitVec n := BitVec.ofBoolListLE vec.toArray.toList |>.cast (by simp)
+
 open Std.Format in 
-def Utils.dump (S: BitVec n)(spacing? : Bool := false): Std.Format :=
+def Utils.dump' (S: BitVec n)(spacing? : Bool := false): Std.Format :=
   let final := S.toByteArray.data
     |>.map (·.toBitVec.toHex)
     |>.toList
@@ -109,6 +111,8 @@ def Utils.dump (S: BitVec n)(spacing? : Bool := false): Std.Format :=
       nest 8 <| lineBreak? ++ formatted
     else
       formatted
+
+def Utils.dump (S: Vector Bool n)(spacing? : Bool := false): Std.Format := Utils.dump' S.toBitVecLE (spacing? := spacing?)
 
 theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
 : n*y + x < n*m
@@ -132,8 +136,3 @@ theorem Nat.lt_packing_right {x y: Nat}(x_lt: x < n)(y_lt: y < m)
         conv => rhs; rw [←Nat.mul_one n]
         apply Nat.mul_le_mul_left n m_pos
       omega
-
-/- def Fin.pack(x: Fin n)(y: Fin m): Fin (n*m) where -/
-/-   val := n*y.val + x.val -/
-/-   isLt := Nat.lt_packing_right x.isLt y.isLt -/
-
