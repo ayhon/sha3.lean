@@ -1,5 +1,6 @@
-import Sha3.Spec
+import Sha3.Vector
 
+@[simp]
 theorem Spec.Keccak.StateArray.encode_decode(x: Fin 5)(y: Fin 5)(z: Fin (w l))
 : decodeIndex (encodeIndex x y z) = (x,y,z) := by
   obtain ⟨x,x_lt⟩:= x
@@ -26,6 +27,17 @@ theorem Spec.Keccak.StateArray.decode_encode(c: Fin (b l))
   simp [decodeIndex, encodeIndex]
   rw [Nat.div_add_mod (c / w l) 5]
   rw [Nat.div_add_mod (c) (w l)]
+
+@[simp]
+theorem Spec.Keccak.StateArray.decode_encode'(c: Fin (b l))
+: let xyz := decodeIndex c
+  encodeIndex xyz.1 xyz.2.1 xyz.2.2 = c
+:= by
+  obtain ⟨c, c_lt⟩ := c
+  simp [decodeIndex, encodeIndex]
+  rw [Nat.div_add_mod (c / w l) 5]
+  rw [Nat.div_add_mod (c) (w l)]
+
 
 theorem Spec.Keccak.StateArray.encode_inj(x x' y y': Fin 5)(z z': Fin (w l))
 : encodeIndex x y z = encodeIndex x' y' z' ↔ x = x' ∧ y = y' ∧ z = z'
