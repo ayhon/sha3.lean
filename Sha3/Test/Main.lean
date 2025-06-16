@@ -1,7 +1,6 @@
 import Sha3.Spec
 import Sha3.Utils
-/- import Test.TestVectors -/
-/- import Test.TestVectors -/
+import Sha3.Test.TestVectors
 /- import Test.IntermediateValues -/
 open Spec (Bit)
 
@@ -170,13 +169,3 @@ def main(_args: List String): IO Unit := do
     throw <| IO.userError "Errors found (see command output)"
 
   IO.println "SUCCESS"
-
-#check Spec.Keccak.ι.RC
-#eval show _ from Id.run do
-  let mut res := []
-  for t in [0:24] do
-    let x := @Spec.Keccak.ι.RC 6 t
-    res := res ++ [x.toNat]
-  dbg_trace s!"{res}"
-  return 42
-    

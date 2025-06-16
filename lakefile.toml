@@ -12,7 +12,7 @@ extraDepTargets = ["Sha3"]
 
 [[lean_exe]]
 name = "TestExec"
-srcDir = "Test"
+srcDir = "Sha3/Test"
 root = "Main"
 
 [[lean_exe]]
