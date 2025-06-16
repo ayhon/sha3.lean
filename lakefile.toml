@@ -22,4 +22,5 @@ root = "Cli"
 
 [[require]]
 name = "aeneas"
-path = "/home/ayhon/inria/aeneas/backends/lean"
+git = { url = "https://github.com/ayhon/aeneas", subDir = "backends/lean" }
+rev = "ad86950"
