@@ -1,4 +1,5 @@
 import Sha3.Utils
+import Sha3.OfFnWorkaround
 
 @[simp] local instance(x: Fin n): NeZero (n - x) where out := by omega
 
@@ -47,61 +48,6 @@ def encodeIndex: Fin (b l) where
       |> Nat.lt_packing_right x.isLt
       |> Nat.lt_packing_right z.isLt
     simpa [Spec.b, Nat.mul_comm]
-
-def Array.ofFn' {n} (f : Fin n → α) : Array α := go (Array.emptyWithCapacity n) n (Nat.le_refl n) where
-  go (acc : Array α) : (i : Nat) → i ≤ n → Array α
-  | i + 1, h =>
-     have w : n - i - 1 < n :=
-       Nat.lt_of_lt_of_le (Nat.sub_one_lt (Nat.sub_ne_zero_iff_lt.mpr h)) (Nat.sub_le n i)
-     go (acc.push (f ⟨n - i - 1, w⟩)) i (Nat.le_of_succ_le h)
-  | 0, _ => acc
-
-@[simp] theorem Array.size_ofFn'_go {n} {f : Fin n → α} {i acc h} :
-    (ofFn'.go f acc i h).size = acc.size + i := by
-  induction i generalizing acc with
-  | zero => simp [ofFn'.go]
-  | succ i ih =>
-    simpa [ofFn'.go, ih] using Nat.succ_add_eq_add_succ acc.size i
-@[simp] theorem Array.size_ofFn' {n : Nat} {f : Fin n → α} : (ofFn' f).size = n := by simp [ofFn']
-
-theorem Array.getElem_ofFn'_go {f : Fin n → α} {acc: Array α}{i k}(h : i ≤ n) (w₁ : k < acc.size + i) :
-    (ofFn'.go f acc i h)[k]'(by simpa using w₁) =
-      if w₂ : k < acc.size then acc[k] else f ⟨n - i + k - acc.size, by omega⟩ := by
-  induction i generalizing acc k with
-  | zero =>
-    simp at w₁
-    simp_all [ofFn'.go]
-  | succ i ih =>
-    unfold ofFn'.go
-    rw [ih]
-    · simp only [Array.size_push]
-      split <;> rename_i h'
-      · rw [Array.getElem_push]
-        split
-        · rfl
-        · congr 2
-          omega
-      · split
-        · omega
-        · congr 2
-          omega
-    · simp
-      omega
-
-@[simp] theorem Array.getElem_ofFn' {f : Fin n → α} {i : Nat} (h : i < (ofFn' f).size) :
-    (ofFn' f)[i] = f ⟨i, Array.size_ofFn' (f := f) ▸ h⟩ := by
-  unfold ofFn'
-  rw [getElem_ofFn'_go] <;> simp_all
-
-
-@[inline] def Vector.ofFn' (f : Fin n → α) : Vector α n := ⟨Array.ofFn' f, by simp⟩
-
-@[simp] theorem Vector.getElem_ofFn' {f : Fin n → α} {i : Nat} (h : i < n) :
-    (Vector.ofFn' f)[i] = f ⟨i, h⟩ := by
-  unfold ofFn'; rw [Vector.getElem_mk, Array.getElem_ofFn']
-
-@[simp] theorem Vector.getElem!_ofFn' [Inhabited α]{f : Fin n → α} {i : Nat} (h : i < n) :
-    (Vector.ofFn' f)[i]! = f ⟨i, h⟩ := by rw [getElem!_pos, Vector.getElem_ofFn']
 
 /-- Given a function f which takes x, y and z, return a state array A' where
     A'[x,y,z] = f x y z -/
@@ -176,13 +122,12 @@ def ι(iᵣ: Nat)(A: StateArray l): StateArray l := Id.run do
 end «Step Mappings»/- }}} -/
 
 def Rnd(A: StateArray l)(iᵣ: Nat) :=
-  let A' := A
-  let A' := θ A'
-  let A' := ρ A'
-  let A' := π A'
-  let A' := χ A'
-  let A' := ι iᵣ A'
-  A'
+  let A := θ A
+  let A := ρ A
+  let A := π A
+  let A := χ A
+  let A := ι iᵣ A
+  A
 
 /-- The permutation function Keccak-p[b,nᵣ], defined in terms of l instead of b. -/
 def P(l: Fin 7)(nᵣ: Nat)(S: Bitstring (b l)): Bitstring (b l) := Id.run do
@@ -206,8 +151,9 @@ def «pad10*1»(x m: Nat): Array Bit :=
 def sponge.absorb{l: Fin 7}
   (f: Bitstring (b l) → Bitstring (b l))
   (pad: Nat → Nat → Array Bit)
-  (r: { x: Nat // 0 < x ∧ x < b l} )
+  (r: Nat )
   (N: Array Bit)
+  (r_bnd: 0 < r ∧ r < b l := by omega)
 : Bitstring (b l) :=
   let P := N ++ pad r N.size
   /- assert! P.size % r == 0 -/
@@ -225,9 +171,10 @@ def sponge.absorb{l: Fin 7}
 
 def sponge.squeeze
     (f: Bitstring (b l) → Bitstring (b l))
-    (r: {x: Nat // 0 < x ∧ x < b l})
+    (r: Nat)
     (Z: Bitstring m)
     (S: Bitstring (b l))
+    (r_bnd: 0 < r ∧ r < b l := by omega)
 : Bitstring d
 :=
   if d <= m then
@@ -246,9 +193,10 @@ arbitrary output length. The construction employs the following three components
 def sponge{l: Fin 7}
   (f: Bitstring (b l) → Bitstring (b l))
   (pad: Nat → Nat → Array Bit)
-  (r: {x: Nat // 0 < x ∧ x < b l})
+  (r: Nat)
   (N: Array Bit)
   (d: Nat)
+  (r_bnd: 0 < r ∧ r < b l := by omega)
 : Bitstring d :=
   let S := sponge.absorb f pad r N
   let Z := #v[]
@@ -258,27 +206,29 @@ def sponge{l: Fin 7}
 end Sponge/- }}} -/
 
 /-- The Keccak[c] family of sponge functions, restricted to b = 1600 (or l = 6) -/
-def Keccak(c: {x: Nat // 0 < x ∧ x < b 6}):= 
+def Keccak(c: Nat) (N: Array Bit) (d: Nat)
+  (c_bnd: 0 < c ∧ c < b 6 := by (first | decide | omega)):= 
   sponge (f   := Keccak.P 6 (nᵣ := 24)) 
          (pad := «pad10*1») 
-         (r   := ⟨(b 6) - c, by omega⟩)
+         (r   := (b 6) - c)
+         N d
 
 private abbrev     SHA3_suffix: Array Bit := #[false, true]
 private abbrev RawSHAKE_suffix: Array Bit := #[true,  true]
 private abbrev    SHAKE_suffix: Array Bit := RawSHAKE_suffix ++ #[true,  true]
 
 -- Hash functions
-def SHA3_224   (M : Array Bit)         := Keccak (c := ⟨ 448, by decide⟩) (M ++ SHA3_suffix    ) 224
-def SHA3_256   (M : Array Bit)         := Keccak (c := ⟨ 512, by decide⟩) (M ++ SHA3_suffix    ) 256
-def SHA3_384   (M : Array Bit)         := Keccak (c := ⟨ 768, by decide⟩) (M ++ SHA3_suffix    ) 384
-def SHA3_512   (M : Array Bit)         := Keccak (c := ⟨1024, by decide⟩) (M ++ SHA3_suffix    ) 512
-
--- XOF functions
-def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c := ⟨ 256, by decide⟩) (M ++ SHAKE_suffix   )   d
-def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c := ⟨ 512, by decide⟩) (M ++ SHAKE_suffix   )   d
-
-def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c := ⟨ 256, by decide⟩) (M ++ RawSHAKE_suffix)   d
-def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c := ⟨ 512, by decide⟩) (M ++ RawSHAKE_suffix)   d
+def SHA3_224   (M : Array Bit)         := Keccak (c :=  448) (N := M ++ SHA3_suffix    ) (d := 224)
+def SHA3_256   (M : Array Bit)         := Keccak (c :=  512) (N := M ++ SHA3_suffix    ) (d := 256)
+def SHA3_384   (M : Array Bit)         := Keccak (c :=  768) (N := M ++ SHA3_suffix    ) (d := 384)
+def SHA3_512   (M : Array Bit)         := Keccak (c := 1024) (N := M ++ SHA3_suffix    ) (d := 512)
+                                                              
+-- XOF functions                                              
+def SHAKE128   (M : Array Bit)(d: Nat) := Keccak (c :=  256) (N := M ++ SHAKE_suffix   )   (d := d)
+def SHAKE256   (M : Array Bit)(d: Nat) := Keccak (c :=  512) (N := M ++ SHAKE_suffix   )   (d := d)
+                                                             
+def RawSHAKE128(M : Array Bit)(d: Nat) := Keccak (c :=  256) (N := M ++ RawSHAKE_suffix)   (d := d)
+def RawSHAKE256(M : Array Bit)(d: Nat) := Keccak (c :=  512) (N := M ++ RawSHAKE_suffix)   (d := d)
 -- ≤
 
 end Spec/- }}} -/
