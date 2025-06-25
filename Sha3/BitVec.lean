@@ -71,7 +71,7 @@ def row (A: StateArray l): BitVec 5     := BitVec.ofFn (A.get · y z)
 def col (A: StateArray l): BitVec 5     := BitVec.ofFn (A.get x · z)
 def lane(A: StateArray l): BitVec (w l) := BitVec.ofFn (A.get x y ·)
 
-instance: Repr (StateArray l) where reprPrec A _ := Utils.dump (spacing? := true) A.toBitVec
+instance: Repr (StateArray l) where reprPrec A _ := Utils.dump' (spacing? := true) A.toBitVec
 
 end StateArray/- }}} -/
 end Data/- }}} -/
